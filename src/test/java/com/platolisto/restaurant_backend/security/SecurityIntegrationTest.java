@@ -49,6 +49,9 @@ class SecurityIntegrationTest {
     @Autowired
     private JwtService jwtService;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private Restaurant mockRestaurant;
@@ -85,6 +88,8 @@ class SecurityIntegrationTest {
     }
 
     private void cleanup() {
+        jdbcTemplate.execute("DELETE FROM order_details");
+        jdbcTemplate.execute("DELETE FROM orders");
         userRepository.deleteAll();
         restaurantRepository.deleteAll();
     }

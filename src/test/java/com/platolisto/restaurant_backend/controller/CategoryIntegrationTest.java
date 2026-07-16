@@ -96,6 +96,8 @@ class CategoryIntegrationTest {
     }
 
     private void cleanup() {
+        jdbcTemplate.execute("DELETE FROM order_details");
+        jdbcTemplate.execute("DELETE FROM orders");
         categoryRepository.deleteAll();
         userRepository.deleteAll();
         restaurantRepository.deleteAll();

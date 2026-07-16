@@ -32,6 +32,9 @@ class TenantDataIsolationTest {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     private Restaurant tenant1;
     private Restaurant tenant2;
 
@@ -100,6 +103,8 @@ class TenantDataIsolationTest {
     }
 
     private void cleanup() {
+        jdbcTemplate.execute("DELETE FROM order_details");
+        jdbcTemplate.execute("DELETE FROM orders");
         productRepository.deleteAll();
         categoryRepository.deleteAll();
         restaurantRepository.deleteAll();

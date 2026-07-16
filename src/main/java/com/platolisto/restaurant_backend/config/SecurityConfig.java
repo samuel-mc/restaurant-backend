@@ -31,6 +31,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/login").permitAll()
                 .requestMatchers("/api/v1/menu/**").permitAll()
                 .requestMatchers("/api/v1/orders/**").permitAll()
+                .requestMatchers("/ws-orders", "/ws-orders/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 
                 // Rutas del panel administrativo protegidas por rol

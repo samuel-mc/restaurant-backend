@@ -115,6 +115,8 @@ class ProductIntegrationTest {
     }
 
     private void cleanup() {
+        jdbcTemplate.execute("DELETE FROM order_details");
+        jdbcTemplate.execute("DELETE FROM orders");
         productRepository.deleteAll();
         categoryRepository.deleteAll();
         userRepository.deleteAll();

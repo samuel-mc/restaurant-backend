@@ -15,6 +15,7 @@ import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final RestaurantRepository restaurantRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public OrderResponse createOrder(OrderRequest request) {
@@ -91,7 +93,40 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         log.info("Pedido creado con éxito: ID {}, UUID {}, Total {}", savedOrder.getId(), savedOrder.getUuid(), savedOrder.getTotalAmount());
 
-        return mapToResponse(savedOrder);
+        // Mapear a respuesta para el WebSocket
+        OrderResponse response = mapToResponse(savedOrder);
+
+        // Notificar en tiempo real al canal WebSocket específico del restaurante
+        String destination = "/topic/restaurants/" + restaurantId + "/orders";
+        messagingTemplate.convertAndSend(destination, response);
+        log.info("Notificación WebSocket de creación de pedido enviada a {}", destination);
+
+        return response;
+    }
+
+    @Transactional
+    public OrderResponse updateOrderStatus(UUID uuid, OrderStatus status) {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        Order order = orderRepository.findByUuid(uuid)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid));
+
+        // Actualizar el estado
+        order.setStatus(status);
+        Order updatedOrder = orderRepository.save(order);
+        log.info("Estado del pedido actualizado a {}: UUID {}", status, uuid);
+
+        OrderResponse response = mapToResponse(updatedOrder);
+
+        // Notificar en tiempo real la actualización de estado del pedido
+        String destination = "/topic/restaurants/" + restaurantId + "/orders";
+        messagingTemplate.convertAndSend(destination, response);
+        log.info("Notificación WebSocket de actualización de estado enviada a {}", destination);
+
+        return response;
     }
 
     private OrderResponse mapToResponse(Order order) {
