@@ -33,3 +33,4 @@ build/
 .vscode/
 PROJECT_RULES.md
 .agents/AGENTS.md
+docker-compose.yml
