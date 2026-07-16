@@ -11,8 +11,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(name = "orders")
+@Filter(name = "tenantFilter", condition = "restaurant_id = :restaurantId")
 @Getter
 @Setter
 @NoArgsConstructor

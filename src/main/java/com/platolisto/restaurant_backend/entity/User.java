@@ -6,6 +6,8 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.OffsetDateTime;
 
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(
     name = "users",
@@ -13,6 +15,7 @@ import java.time.OffsetDateTime;
         @UniqueConstraint(name = "uk_restaurant_user_email", columnNames = {"restaurant_id", "email"})
     }
 )
+@Filter(name = "tenantFilter", condition = "restaurant_id = :restaurantId")
 @Getter
 @Setter
 @NoArgsConstructor

@@ -8,10 +8,13 @@ import org.hibernate.annotations.SQLRestriction;
 
 import java.time.OffsetDateTime;
 
+import org.hibernate.annotations.Filter;
+
 @Entity
 @Table(name = "categories")
 @SQLDelete(sql = "UPDATE categories SET deleted = true WHERE id = ?")
 @SQLRestriction("deleted = false")
+@Filter(name = "tenantFilter", condition = "restaurant_id = :restaurantId")
 @Getter
 @Setter
 @NoArgsConstructor

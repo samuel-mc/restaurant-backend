@@ -9,10 +9,17 @@ import org.hibernate.annotations.SQLRestriction;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
+import org.hibernate.annotations.*;
+
 @Entity
 @Table(name = "products")
 @SQLDelete(sql = "UPDATE products SET deleted = true WHERE id = ?")
 @SQLRestriction("deleted = false")
+@FilterDef(
+    name = "tenantFilter",
+    parameters = @ParamDef(name = "restaurantId", type = Long.class)
+)
+@Filter(name = "tenantFilter", condition = "restaurant_id = :restaurantId")
 @Getter
 @Setter
 @NoArgsConstructor
