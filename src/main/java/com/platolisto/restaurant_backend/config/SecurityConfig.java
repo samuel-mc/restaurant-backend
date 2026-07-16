@@ -30,6 +30,7 @@ public class SecurityConfig {
                 // Rutas públicas de Autenticación y Menú del Comensal
                 .requestMatchers("/api/v1/auth/login").permitAll()
                 .requestMatchers("/api/v1/menu/**").permitAll()
+                .requestMatchers("/api/v1/orders/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 
                 // Rutas del panel administrativo protegidas por rol

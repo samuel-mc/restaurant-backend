@@ -33,4 +33,11 @@ public class GlobalExceptionHandler {
         response.put("error", "Credenciales inválidas."); // No revelamos detalles específicos por seguridad
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
+
+    @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
+    public ResponseEntity<Map<String, String>> handleBadRequestExceptions(RuntimeException ex) {
+        Map<String, String> response = new HashMap<>();
+        response.put("error", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
 }
