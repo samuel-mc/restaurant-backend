@@ -38,6 +38,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Rutas públicas de Autenticación y Menú del Comensal
                 .requestMatchers("/api/v1/auth/login").permitAll()
+                .requestMatchers("/api/v1/tenants/register").permitAll()
                 .requestMatchers("/api/v1/menu/**").permitAll()
                 .requestMatchers("/api/v1/orders/**").permitAll()
                 .requestMatchers("/ws-orders", "/ws-orders/**").permitAll()

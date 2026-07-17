@@ -10,4 +10,5 @@ import java.util.Optional;
 public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
     Optional<Restaurant> findBySubdomainAndIsActiveTrue(String subdomain);
     Optional<Restaurant> findByCustomDomainAndIsActiveTrue(String customDomain);
+    boolean existsBySubdomainIgnoreCase(String subdomain);
 }
