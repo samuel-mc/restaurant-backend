@@ -93,15 +93,30 @@ public class OrderService {
         Order savedOrder = orderRepository.save(order);
         log.info("Pedido creado con éxito: ID {}, UUID {}, Total {}", savedOrder.getId(), savedOrder.getUuid(), savedOrder.getTotalAmount());
 
-        // Mapear a respuesta para el WebSocket
         OrderResponse response = mapToResponse(savedOrder);
-
-        // Notificar en tiempo real al canal WebSocket específico del restaurante
-        String destination = "/topic/restaurants/" + restaurantId + "/orders";
-        messagingTemplate.convertAndSend(destination, response);
-        log.info("Notificación WebSocket de creación de pedido enviada a {}", destination);
-
+        publishOrderEvents(restaurantId, response);
         return response;
+    }
+
+    /**
+     * Consulta pública de un pedido por UUID, acotada al tenant actual.
+     * Usada por la pantalla de tracking del comensal para el estado inicial.
+     */
+    @Transactional(readOnly = true)
+    public OrderResponse getOrderByUuid(UUID uuid) {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        Order order = orderRepository.findByUuid(uuid)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid));
+
+        if (!order.getRestaurant().getId().equals(restaurantId)) {
+            throw new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid);
+        }
+
+        return mapToResponse(order);
     }
 
     @Transactional
@@ -114,19 +129,30 @@ public class OrderService {
         Order order = orderRepository.findByUuid(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid));
 
-        // Actualizar el estado
+        if (!order.getRestaurant().getId().equals(restaurantId)) {
+            throw new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid);
+        }
+
         order.setStatus(status);
         Order updatedOrder = orderRepository.save(order);
         log.info("Estado del pedido actualizado a {}: UUID {}", status, uuid);
 
         OrderResponse response = mapToResponse(updatedOrder);
-
-        // Notificar en tiempo real la actualización de estado del pedido
-        String destination = "/topic/restaurants/" + restaurantId + "/orders";
-        messagingTemplate.convertAndSend(destination, response);
-        log.info("Notificación WebSocket de actualización de estado enviada a {}", destination);
-
+        publishOrderEvents(restaurantId, response);
         return response;
+    }
+
+    /**
+     * Notifica a cocina (canal del restaurante) y al comensal (canal por UUID).
+     */
+    private void publishOrderEvents(Long restaurantId, OrderResponse response) {
+        String kitchenTopic = "/topic/restaurants/" + restaurantId + "/orders";
+        messagingTemplate.convertAndSend(kitchenTopic, response);
+        log.info("Notificación WebSocket enviada a {}", kitchenTopic);
+
+        String trackingTopic = "/topic/order/" + response.getUuid();
+        messagingTemplate.convertAndSend(trackingTopic, response);
+        log.info("Notificación WebSocket de tracking enviada a {}", trackingTopic);
     }
 
     private OrderResponse mapToResponse(Order order) {
