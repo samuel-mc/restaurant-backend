@@ -94,8 +94,31 @@ public class OrderService {
         log.info("Pedido creado con éxito: ID {}, UUID {}, Total {}", savedOrder.getId(), savedOrder.getUuid(), savedOrder.getTotalAmount());
 
         OrderResponse response = mapToResponse(savedOrder);
-        publishOrderEvents(restaurantId, response);
+        publishOrderEvents(restaurant, response);
         return response;
+    }
+
+    /**
+     * Pedidos activos para el monitor de cocina/caja
+     * (PENDING, ACCEPTED, IN_KITCHEN) del tenant actual.
+     */
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getActiveOrders() {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        List<OrderStatus> activeStatuses = List.of(
+                OrderStatus.PENDING,
+                OrderStatus.ACCEPTED,
+                OrderStatus.IN_KITCHEN
+        );
+
+        return orderRepository.findActiveWithDetails(activeStatuses).stream()
+                .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -138,17 +161,26 @@ public class OrderService {
         log.info("Estado del pedido actualizado a {}: UUID {}", status, uuid);
 
         OrderResponse response = mapToResponse(updatedOrder);
-        publishOrderEvents(restaurantId, response);
+        publishOrderEvents(updatedOrder.getRestaurant(), response);
         return response;
     }
 
     /**
-     * Notifica a cocina (canal del restaurante) y al comensal (canal por UUID).
+     * Notifica a cocina (por id y por slug) y al comensal (por UUID del pedido).
      */
-    private void publishOrderEvents(Long restaurantId, OrderResponse response) {
-        String kitchenTopic = "/topic/restaurants/" + restaurantId + "/orders";
-        messagingTemplate.convertAndSend(kitchenTopic, response);
-        log.info("Notificación WebSocket enviada a {}", kitchenTopic);
+    private void publishOrderEvents(Restaurant restaurant, OrderResponse response) {
+        Long restaurantId = restaurant.getId();
+        String slug = restaurant.getSubdomain();
+
+        String kitchenById = "/topic/restaurants/" + restaurantId + "/orders";
+        messagingTemplate.convertAndSend(kitchenById, response);
+        log.info("Notificación WebSocket enviada a {}", kitchenById);
+
+        if (slug != null && !slug.isBlank()) {
+            String kitchenBySlug = "/topic/admin/" + slug + "/orders";
+            messagingTemplate.convertAndSend(kitchenBySlug, response);
+            log.info("Notificación WebSocket admin enviada a {}", kitchenBySlug);
+        }
 
         String trackingTopic = "/topic/order/" + response.getUuid();
         messagingTemplate.convertAndSend(trackingTopic, response);

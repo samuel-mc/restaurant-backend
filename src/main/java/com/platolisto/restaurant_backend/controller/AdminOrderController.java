@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -16,6 +17,12 @@ import java.util.UUID;
 public class AdminOrderController {
 
     private final OrderService orderService;
+
+    /** Snapshot de comandas activas para el monitor de cocina/caja. */
+    @GetMapping("/active")
+    public ResponseEntity<List<OrderResponse>> getActiveOrders() {
+        return ResponseEntity.ok(orderService.getActiveOrders());
+    }
 
     @PatchMapping("/{uuid}/status")
     public ResponseEntity<OrderResponse> updateOrderStatus(
