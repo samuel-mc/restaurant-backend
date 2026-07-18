@@ -46,7 +46,7 @@ public class ProductService {
 
         String imageUrl = request.getImageUrl();
         if (image != null && !image.isEmpty()) {
-            imageUrl = objectStorageService.uploadProductImage(restaurantId, image);
+            imageUrl = objectStorageService.uploadImage(image, restaurant.getSubdomain());
         }
 
         Product product = Product.builder()
@@ -88,6 +88,9 @@ public class ProductService {
     @Transactional
     public ProductResponse updateProduct(UUID uuid, ProductRequest request, MultipartFile image) {
         Long restaurantId = requireRestaurantId();
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+
         Product product = productRepository.findByUuid(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el producto con UUID: " + uuid));
 
@@ -100,7 +103,7 @@ public class ProductService {
         product.setCategory(category);
 
         if (image != null && !image.isEmpty()) {
-            product.setImageUrl(objectStorageService.uploadProductImage(restaurantId, image));
+            product.setImageUrl(objectStorageService.uploadImage(image, restaurant.getSubdomain()));
         } else if (request.getImageUrl() != null) {
             product.setImageUrl(request.getImageUrl());
         }

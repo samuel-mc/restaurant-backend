@@ -38,3 +38,7 @@ DEPLOYMENT_GUIDE.md
 
 ### Uploads locales (R2-ready stub) ###
 uploads/
+
+### Secretos locales (R2 / keys) ###
+src/main/resources/application-local-secrets.properties
+

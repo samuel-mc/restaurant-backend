@@ -31,9 +31,11 @@ public class ProductController {
 
     /**
      * Alta multipart (R2-ready): campos de texto + archivo {@code image}.
-     * Content-Type lo fija el cliente automáticamente vía FormData.
+     * <p>
+     * {@code multipart/*} acepta {@code multipart/form-data} con cualquier parámetro
+     * ({@code boundary}, {@code charset}, etc.) — necesario para el FormData del BFF (undici).
      */
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(consumes = "multipart/*")
     public ResponseEntity<ProductResponse> createProductMultipart(
             @RequestParam("name") String name,
             @RequestParam(value = "description", required = false) String description,
@@ -72,7 +74,7 @@ public class ProductController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping(path = "/{uuid}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PutMapping(path = "/{uuid}", consumes = "multipart/*")
     public ResponseEntity<ProductResponse> updateProductMultipart(
             @PathVariable UUID uuid,
             @RequestParam("name") String name,

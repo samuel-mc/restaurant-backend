@@ -1,7 +1,9 @@
 package com.platolisto.restaurant_backend.storage;
 
+import com.platolisto.restaurant_backend.exception.StorageException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,10 +17,15 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Implementación local "R2-ready": misma interfaz que usará Cloudflare R2.
- * Persiste en disco y expone URL bajo {@code /media/**}.
+ * Fallback local cuando R2 está desactivado ({@code cloudflare.r2.enabled=false}).
  */
 @Service
+@ConditionalOnProperty(
+        prefix = "cloudflare.r2",
+        name = "enabled",
+        havingValue = "false",
+        matchIfMissing = true
+)
 @Slf4j
 public class LocalObjectStorageService implements ObjectStorageService {
 
@@ -43,9 +50,12 @@ public class LocalObjectStorageService implements ObjectStorageService {
     }
 
     @Override
-    public String uploadProductImage(Long restaurantId, MultipartFile file) {
+    public String uploadImage(MultipartFile file, String tenantSlug) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("El archivo de imagen está vacío.");
+        }
+        if (tenantSlug == null || tenantSlug.isBlank()) {
+            throw new IllegalArgumentException("El tenantSlug es requerido para subir la imagen.");
         }
 
         String contentType = file.getContentType() != null
@@ -57,16 +67,16 @@ public class LocalObjectStorageService implements ObjectStorageService {
             );
         }
 
-        String extension = extensionFor(contentType, file.getOriginalFilename());
-        String relativeKey = "tenants/%d/products/%s%s".formatted(
-                restaurantId,
+        String safeName = sanitizeFilename(file.getOriginalFilename());
+        String relativeKey = "tenants/%s/products/%s-%s".formatted(
+                tenantSlug.trim().toLowerCase(Locale.ROOT),
                 UUID.randomUUID(),
-                extension
+                safeName
         );
 
         Path destination = rootDirectory.resolve(relativeKey).normalize();
         if (!destination.startsWith(rootDirectory)) {
-            throw new IllegalStateException("Ruta de almacenamiento inválida.");
+            throw new StorageException("Ruta de almacenamiento inválida.");
         }
 
         try {
@@ -75,27 +85,24 @@ public class LocalObjectStorageService implements ObjectStorageService {
                 Files.copy(in, destination, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException ex) {
-            throw new IllegalStateException("No se pudo guardar la imagen del producto.", ex);
+            throw new StorageException("No se pudo guardar la imagen del producto.", ex);
         }
 
         String publicUrl = publicBaseUrl + "/media/" + relativeKey;
-        log.info("Imagen de producto guardada: {}", publicUrl);
+        log.info("Imagen de producto guardada localmente: {}", publicUrl);
         return publicUrl;
     }
 
-    private static String extensionFor(String contentType, String originalFilename) {
-        return switch (contentType) {
-            case "image/jpeg" -> ".jpg";
-            case "image/png" -> ".png";
-            case "image/webp" -> ".webp";
-            case "image/gif" -> ".gif";
-            default -> {
-                if (originalFilename != null && originalFilename.contains(".")) {
-                    String ext = originalFilename.substring(originalFilename.lastIndexOf('.'));
-                    yield ext.toLowerCase(Locale.ROOT);
-                }
-                yield ".bin";
-            }
-        };
+    private static String sanitizeFilename(String originalFilename) {
+        String name = originalFilename == null || originalFilename.isBlank()
+                ? "image.bin"
+                : originalFilename.trim();
+        name = name.replace('\\', '/');
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0) {
+            name = name.substring(slash + 1);
+        }
+        name = name.replaceAll("[^a-zA-Z0-9._-]", "_");
+        return name.isBlank() ? "image.bin" : name;
     }
 }

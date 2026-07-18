@@ -3,17 +3,16 @@ package com.platolisto.restaurant_backend.storage;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Abstracción de almacenamiento de objetos (R2 / S3 / local).
- * La implementación actual es local; R2 reemplazará el bean sin tocar controladores.
+ * Abstracción de almacenamiento de objetos (Cloudflare R2 / S3 / local).
  */
 public interface ObjectStorageService {
 
     /**
      * Sube la imagen de un producto y devuelve la URL pública persistible en DB.
      *
-     * @param restaurantId tenant dueño del archivo
-     * @param file         imagen (image/*)
-     * @return URL pública (absoluta o relativa servible)
+     * @param file       imagen (image/*)
+     * @param tenantSlug subdominio del restaurante (ej. {@code latrattoria})
+     * @return URL pública absoluta del objeto
      */
-    String uploadProductImage(Long restaurantId, MultipartFile file);
+    String uploadImage(MultipartFile file, String tenantSlug);
 }
