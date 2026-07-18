@@ -44,6 +44,8 @@ public class SecurityConfig {
                 .requestMatchers("/ws-orders", "/ws-orders/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/error").permitAll()
+                // Imágenes de productos (local hoy; R2 CDN mañana)
+                .requestMatchers("/media/**").permitAll()
                 
                 // Rutas del panel administrativo protegidas por rol
                 .requestMatchers("/api/v1/admin/**").hasAnyRole("OWNER", "ADMIN")

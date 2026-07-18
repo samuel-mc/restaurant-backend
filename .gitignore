@@ -35,3 +35,6 @@ PROJECT_RULES.md
 .agents/AGENTS.md
 docker-compose.yml
 DEPLOYMENT_GUIDE.md
+
+### Uploads locales (R2-ready stub) ###
+uploads/

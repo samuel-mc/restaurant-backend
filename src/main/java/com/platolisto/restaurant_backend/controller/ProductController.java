@@ -6,9 +6,12 @@ import com.platolisto.restaurant_backend.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,9 +22,32 @@ public class ProductController {
 
     private final ProductService productService;
 
-    @PostMapping
+    /** Alta JSON (sin archivo). */
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ProductResponse> createProduct(@Valid @RequestBody ProductRequest request) {
         ProductResponse response = productService.createProduct(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Alta multipart (R2-ready): campos de texto + archivo {@code image}.
+     * Content-Type lo fija el cliente automáticamente vía FormData.
+     */
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ProductResponse> createProductMultipart(
+            @RequestParam("name") String name,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam("price") BigDecimal price,
+            @RequestParam("categoryId") Long categoryId,
+            @RequestParam(value = "image", required = false) MultipartFile image
+    ) {
+        ProductRequest request = ProductRequest.builder()
+                .name(name)
+                .description(description)
+                .price(price)
+                .categoryId(categoryId)
+                .build();
+        ProductResponse response = productService.createProduct(request, image);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -37,12 +63,31 @@ public class ProductController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/{uuid}")
+    @PutMapping(path = "/{uuid}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ProductResponse> updateProduct(
             @PathVariable UUID uuid,
             @Valid @RequestBody ProductRequest request
     ) {
         ProductResponse response = productService.updateProduct(uuid, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping(path = "/{uuid}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ProductResponse> updateProductMultipart(
+            @PathVariable UUID uuid,
+            @RequestParam("name") String name,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam("price") BigDecimal price,
+            @RequestParam("categoryId") Long categoryId,
+            @RequestParam(value = "image", required = false) MultipartFile image
+    ) {
+        ProductRequest request = ProductRequest.builder()
+                .name(name)
+                .description(description)
+                .price(price)
+                .categoryId(categoryId)
+                .build();
+        ProductResponse response = productService.updateProduct(uuid, request, image);
         return ResponseEntity.ok(response);
     }
 

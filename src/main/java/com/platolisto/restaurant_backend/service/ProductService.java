@@ -9,10 +9,12 @@ import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.repository.CategoryRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+import com.platolisto.restaurant_backend.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,19 +28,26 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final RestaurantRepository restaurantRepository;
+    private final ObjectStorageService objectStorageService;
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
-        Long restaurantId = TenantContext.getCurrentTenant();
-        if (restaurantId == null) {
-            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
-        }
+        return createProduct(request, null);
+    }
 
+    @Transactional
+    public ProductResponse createProduct(ProductRequest request, MultipartFile image) {
+        Long restaurantId = requireRestaurantId();
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
 
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new IllegalArgumentException("La categoría asociada no existe."));
+
+        String imageUrl = request.getImageUrl();
+        if (image != null && !image.isEmpty()) {
+            imageUrl = objectStorageService.uploadProductImage(restaurantId, image);
+        }
 
         Product product = Product.builder()
                 .restaurant(restaurant)
@@ -46,7 +55,7 @@ public class ProductService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .price(request.getPrice())
-                .imageUrl(request.getImageUrl())
+                .imageUrl(imageUrl)
                 .isAvailable(true)
                 .build();
 
@@ -58,7 +67,6 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<ProductResponse> getProducts() {
-        // Obtenemos los productos activos. Debido al AOP ya están filtrados por restaurant y deleted = false.
         List<Product> products = productRepository.findAll();
         return products.stream()
                 .map(this::mapToResponse)
@@ -74,6 +82,12 @@ public class ProductService {
 
     @Transactional
     public ProductResponse updateProduct(UUID uuid, ProductRequest request) {
+        return updateProduct(uuid, request, null);
+    }
+
+    @Transactional
+    public ProductResponse updateProduct(UUID uuid, ProductRequest request, MultipartFile image) {
+        Long restaurantId = requireRestaurantId();
         Product product = productRepository.findByUuid(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el producto con UUID: " + uuid));
 
@@ -83,8 +97,13 @@ public class ProductService {
         product.setName(request.getName());
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
-        product.setImageUrl(request.getImageUrl());
         product.setCategory(category);
+
+        if (image != null && !image.isEmpty()) {
+            product.setImageUrl(objectStorageService.uploadProductImage(restaurantId, image));
+        } else if (request.getImageUrl() != null) {
+            product.setImageUrl(request.getImageUrl());
+        }
 
         Product updated = productRepository.save(product);
         log.info("Producto actualizado: UUID {}", updated.getUuid());
@@ -97,7 +116,6 @@ public class ProductService {
         Product product = productRepository.findByUuid(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el producto con UUID: " + uuid));
 
-        // Soft Delete
         productRepository.delete(product);
         log.info("Producto eliminado lógicamente: UUID {}", uuid);
     }
@@ -112,6 +130,14 @@ public class ProductService {
         log.info("Disponibilidad del producto cambiada a {}: UUID {}", updated.isAvailable(), uuid);
 
         return mapToResponse(updated);
+    }
+
+    private Long requireRestaurantId() {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+        return restaurantId;
     }
 
     private ProductResponse mapToResponse(Product product) {
