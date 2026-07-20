@@ -7,6 +7,7 @@ import com.platolisto.restaurant_backend.dto.OrderResponse;
 import com.platolisto.restaurant_backend.entity.Order;
 import com.platolisto.restaurant_backend.entity.OrderDetail;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
+import com.platolisto.restaurant_backend.entity.OrderType;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
@@ -44,6 +45,8 @@ public class OrderService {
 
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+
+        validateOrderTypeAllowed(restaurant, request.getOrderType());
 
         // Inicializar Pedido
         Order order = Order.builder()
@@ -140,6 +143,31 @@ public class OrderService {
         }
 
         return mapToResponse(order);
+    }
+
+    private static void validateOrderTypeAllowed(Restaurant restaurant, OrderType orderType) {
+        if (orderType == null) {
+            throw new IllegalArgumentException("El tipo de pedido es requerido.");
+        }
+        switch (orderType) {
+            case IN_TABLE -> {
+                // En salón siempre permitido.
+            }
+            case PICKUP -> {
+                if (!restaurant.isHasPickup()) {
+                    throw new IllegalArgumentException(
+                            "Este restaurante no tiene habilitado el módulo de recoger (pickup)."
+                    );
+                }
+            }
+            case DELIVERY -> {
+                if (!restaurant.isHasDelivery()) {
+                    throw new IllegalArgumentException(
+                            "Este restaurante no tiene habilitado el módulo de delivery."
+                    );
+                }
+            }
+        }
     }
 
     @Transactional

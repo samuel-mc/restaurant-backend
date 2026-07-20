@@ -41,6 +41,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/tenants/register").permitAll()
                 .requestMatchers("/api/v1/menu/**").permitAll()
                 .requestMatchers("/api/v1/orders/**").permitAll()
+                .requestMatchers("/api/v1/restaurants/profile").permitAll()
                 .requestMatchers("/ws-orders", "/ws-orders/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/error").permitAll()
