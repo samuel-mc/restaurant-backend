@@ -29,8 +29,44 @@ public class Restaurant {
     @Column(name = "custom_domain", unique = true, length = 100)
     private String customDomain;
 
-    @Column(name = "logo_url")
+    @Column(name = "logo_url", length = 512)
     private String logoUrl;
+
+    @Column(name = "banner_url", length = 512)
+    private String bannerUrl;
+
+    @Column(name = "primary_color", length = 7)
+    private String primaryColor;
+
+    @Column(name = "secondary_color", length = 7)
+    private String secondaryColor;
+
+    @Column(columnDefinition = "TEXT")
+    private String description;
+
+    @Column(length = 255)
+    private String address;
+
+    @Column(name = "google_maps_url", length = 512)
+    private String googleMapsUrl;
+
+    @Column(length = 30)
+    private String whatsapp;
+
+    @Column(name = "business_hours", length = 255)
+    private String businessHours;
+
+    @Builder.Default
+    @Column(name = "has_delivery", nullable = false)
+    private boolean hasDelivery = false;
+
+    @Builder.Default
+    @Column(name = "has_pickup", nullable = false)
+    private boolean hasPickup = true;
+
+    @Builder.Default
+    @Column(name = "has_reservations", nullable = false)
+    private boolean hasReservations = false;
 
     @Builder.Default
     @Column(name = "is_active", nullable = false)

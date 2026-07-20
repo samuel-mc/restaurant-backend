@@ -46,13 +46,28 @@ public class CloudflareR2StorageService implements ObjectStorageService {
 
     @Override
     public String uploadImage(MultipartFile file, String tenantSlug) {
+        return uploadToFolder(file, tenantSlug, "products");
+    }
+
+    @Override
+    public String uploadBrandAsset(MultipartFile file, String tenantSlug, String folder) {
+        String safeFolder = sanitizeFolder(folder);
+        return uploadToFolder(file, tenantSlug, safeFolder);
+    }
+
+    private String uploadToFolder(MultipartFile file, String tenantSlug, String folder) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("El archivo de imagen está vacío.");
         }
 
         String slug = requireTenantSlug(tenantSlug);
         String contentType = resolveContentType(file);
-        String objectKey = buildObjectKey(slug, file.getOriginalFilename());
+        String objectKey = "tenants/%s/%s/%s-%s".formatted(
+                slug,
+                folder,
+                UUID.randomUUID(),
+                sanitizeFilename(file.getOriginalFilename())
+        );
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
@@ -107,30 +122,25 @@ public class CloudflareR2StorageService implements ObjectStorageService {
         return contentType;
     }
 
-    /**
-     * Clave ordenada: {@code tenants/{slug}/products/{uuid}-{safeOriginalName}}.
-     */
-    private static String buildObjectKey(String tenantSlug, String originalFilename) {
-        String safeName = sanitizeFilename(originalFilename);
-        return "tenants/%s/products/%s-%s".formatted(tenantSlug, UUID.randomUUID(), safeName);
+    private static String sanitizeFolder(String folder) {
+        if (folder == null || folder.isBlank()) {
+            return "brand";
+        }
+        String cleaned = folder.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "");
+        return cleaned.isBlank() ? "brand" : cleaned;
     }
 
     private static String sanitizeFilename(String originalFilename) {
         String name = originalFilename == null || originalFilename.isBlank()
                 ? "image.bin"
                 : originalFilename.trim();
-
-        // Evita path traversal y caracteres raros en la key.
         name = name.replace('\\', '/');
         int slash = name.lastIndexOf('/');
         if (slash >= 0) {
             name = name.substring(slash + 1);
         }
         name = name.replaceAll("[^a-zA-Z0-9._-]", "_");
-        if (name.isBlank()) {
-            name = "image.bin";
-        }
-        return name;
+        return name.isBlank() ? "image.bin" : name;
     }
 
     private static String joinPublicUrl(String baseUrl, String objectKey) {

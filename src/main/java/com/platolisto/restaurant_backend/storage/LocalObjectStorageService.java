@@ -51,6 +51,15 @@ public class LocalObjectStorageService implements ObjectStorageService {
 
     @Override
     public String uploadImage(MultipartFile file, String tenantSlug) {
+        return uploadToFolder(file, tenantSlug, "products");
+    }
+
+    @Override
+    public String uploadBrandAsset(MultipartFile file, String tenantSlug, String folder) {
+        return uploadToFolder(file, tenantSlug, sanitizeFolder(folder));
+    }
+
+    private String uploadToFolder(MultipartFile file, String tenantSlug, String folder) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("El archivo de imagen está vacío.");
         }
@@ -68,8 +77,9 @@ public class LocalObjectStorageService implements ObjectStorageService {
         }
 
         String safeName = sanitizeFilename(file.getOriginalFilename());
-        String relativeKey = "tenants/%s/products/%s-%s".formatted(
+        String relativeKey = "tenants/%s/%s/%s-%s".formatted(
                 tenantSlug.trim().toLowerCase(Locale.ROOT),
+                folder,
                 UUID.randomUUID(),
                 safeName
         );
@@ -85,12 +95,20 @@ public class LocalObjectStorageService implements ObjectStorageService {
                 Files.copy(in, destination, StandardCopyOption.REPLACE_EXISTING);
             }
         } catch (IOException ex) {
-            throw new StorageException("No se pudo guardar la imagen del producto.", ex);
+            throw new StorageException("No se pudo guardar la imagen.", ex);
         }
 
         String publicUrl = publicBaseUrl + "/media/" + relativeKey;
-        log.info("Imagen de producto guardada localmente: {}", publicUrl);
+        log.info("Imagen guardada localmente: {}", publicUrl);
         return publicUrl;
+    }
+
+    private static String sanitizeFolder(String folder) {
+        if (folder == null || folder.isBlank()) {
+            return "brand";
+        }
+        String cleaned = folder.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "");
+        return cleaned.isBlank() ? "brand" : cleaned;
     }
 
     private static String sanitizeFilename(String originalFilename) {

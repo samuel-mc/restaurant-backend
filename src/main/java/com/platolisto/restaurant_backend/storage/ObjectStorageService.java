@@ -9,10 +9,11 @@ public interface ObjectStorageService {
 
     /**
      * Sube la imagen de un producto y devuelve la URL pública persistible en DB.
-     *
-     * @param file       imagen (image/*)
-     * @param tenantSlug subdominio del restaurante (ej. {@code latrattoria})
-     * @return URL pública absoluta del objeto
      */
     String uploadImage(MultipartFile file, String tenantSlug);
+
+    /**
+     * Sube un asset de marca (logo, banner, etc.) bajo {@code tenants/{slug}/{folder}/}.
+     */
+    String uploadBrandAsset(MultipartFile file, String tenantSlug, String folder);
 }
