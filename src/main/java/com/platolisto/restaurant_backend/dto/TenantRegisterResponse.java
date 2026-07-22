@@ -13,4 +13,6 @@ public class TenantRegisterResponse {
     private String tenantSlug;
     private String ownerEmail;
     private String loginPath;
+    private String plan;
+    private String paymentStatus;
 }

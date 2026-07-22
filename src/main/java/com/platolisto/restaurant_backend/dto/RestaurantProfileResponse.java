@@ -26,5 +26,7 @@ public class RestaurantProfileResponse {
     private boolean hasPickup;
     private boolean hasReservations;
     private boolean websitePublished;
+    private String plan;
+    private String paymentStatus;
     private OffsetDateTime updatedAt;
 }

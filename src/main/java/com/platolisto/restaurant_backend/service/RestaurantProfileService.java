@@ -2,8 +2,11 @@ package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.dto.RestaurantProfileRequest;
 import com.platolisto.restaurant_backend.dto.RestaurantProfileResponse;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.storage.ObjectStorageService;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +75,19 @@ public class RestaurantProfileService {
             restaurant.setHasReservations(request.getHasReservations());
         }
         if (request.getWebsitePublished() != null) {
+            SubscriptionPlan plan = restaurant.getPlan() != null
+                    ? restaurant.getPlan()
+                    : SubscriptionPlan.BASIC;
+            PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
+                    ? restaurant.getPaymentStatus()
+                    : PaymentStatus.ACTIVE;
+            if (Boolean.TRUE.equals(request.getWebsitePublished())
+                    && !PlanLimits.canPublishWebsite(plan, paymentStatus)) {
+                throw new IllegalArgumentException(
+                        "Para publicar el sitio necesitas Plan Pro con pago activo. "
+                                + "Canjea un cupón en Configuración o contacta a ventas."
+                );
+            }
             restaurant.setWebsitePublished(request.getWebsitePublished());
         }
 
@@ -136,6 +152,10 @@ public class RestaurantProfileService {
                 .hasPickup(restaurant.isHasPickup())
                 .hasReservations(restaurant.isHasReservations())
                 .websitePublished(restaurant.isWebsitePublished())
+                .plan(restaurant.getPlan() != null ? restaurant.getPlan().name() : "BASIC")
+                .paymentStatus(restaurant.getPaymentStatus() != null
+                        ? restaurant.getPaymentStatus().name()
+                        : PaymentStatus.ACTIVE.name())
                 .updatedAt(restaurant.getUpdatedAt())
                 .build();
     }

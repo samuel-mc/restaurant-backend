@@ -12,4 +12,7 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findByUuid(UUID uuid);
     List<Product> findByIsAvailableTrue();
+
+    /** Cuenta productos activos (respeta {@code @SQLRestriction} deleted = false). */
+    long countByRestaurant_Id(Long restaurantId);
 }

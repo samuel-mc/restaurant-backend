@@ -1,5 +1,6 @@
 package com.platolisto.restaurant_backend.dto;
 
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -37,4 +38,11 @@ public class TenantRegisterRequest {
     @NotBlank(message = "La contraseña es requerida")
     @Size(min = 8, max = 100, message = "La contraseña debe tener al menos 8 caracteres")
     private String ownerPassword;
+
+    /** Plan elegido en onboarding. Si viene null → BASIC. Enterprise no se acepta. */
+    private SubscriptionPlan plan;
+
+    /** Cupón opcional (efectivo / early access) para activar Pro al registrar. */
+    @Size(max = 40)
+    private String couponCode;
 }

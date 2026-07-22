@@ -2,7 +2,9 @@ package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.dto.TenantRegisterRequest;
 import com.platolisto.restaurant_backend.dto.TenantRegisterResponse;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.entity.User;
 import com.platolisto.restaurant_backend.entity.UserRole;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
@@ -27,6 +29,7 @@ public class TenantRegistrationService {
     private final RestaurantRepository restaurantRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CouponService couponService;
 
     @Transactional
     public TenantRegisterResponse register(TenantRegisterRequest request) {
@@ -41,17 +44,31 @@ public class TenantRegistrationService {
             throw new IllegalArgumentException("El subdominio \"" + slug + "\" ya está en uso. Elige otro.");
         }
 
-        // Email globalmente único entre owners (evita confusión multi-tenant al recuperar acceso)
         if (userRepository.findByEmail(email).isPresent()) {
             throw new IllegalArgumentException("Ya existe una cuenta registrada con ese correo electrónico.");
         }
+
+        SubscriptionPlan plan = resolvePlan(request.getPlan());
+        PaymentStatus paymentStatus = plan == SubscriptionPlan.PRO
+                ? PaymentStatus.PENDING_PAYMENT
+                : PaymentStatus.ACTIVE;
 
         Restaurant restaurant = restaurantRepository.save(Restaurant.builder()
                 .name(request.getRestaurantName().trim())
                 .subdomain(slug)
                 .isActive(true)
-                .websitePublished(true)
+                .plan(plan)
+                .paymentStatus(paymentStatus)
+                .websitePublished(false)
                 .build());
+
+        boolean couponApplied = couponService.applyCouponAtRegistration(
+                restaurant,
+                request.getCouponCode()
+        );
+        if (couponApplied) {
+            restaurant = restaurantRepository.save(restaurant);
+        }
 
         userRepository.save(User.builder()
                 .restaurant(restaurant)
@@ -62,7 +79,14 @@ public class TenantRegistrationService {
                 .isActive(true)
                 .build());
 
-        log.info("Tenant registrado: subdomain={}, owner={}", slug, email);
+        log.info(
+                "Tenant registrado: subdomain={}, plan={}, payment={}, couponApplied={}, owner={}",
+                slug,
+                restaurant.getPlan(),
+                restaurant.getPaymentStatus(),
+                couponApplied,
+                email
+        );
 
         return TenantRegisterResponse.builder()
                 .restaurantId(restaurant.getId())
@@ -70,6 +94,18 @@ public class TenantRegistrationService {
                 .tenantSlug(slug)
                 .ownerEmail(email)
                 .loginPath("/admin/login")
+                .plan(restaurant.getPlan().name())
+                .paymentStatus(restaurant.getPaymentStatus().name())
                 .build();
+    }
+
+    private static SubscriptionPlan resolvePlan(SubscriptionPlan requested) {
+        if (requested == null) {
+            return SubscriptionPlan.BASIC;
+        }
+        if (requested == SubscriptionPlan.BASIC || requested == SubscriptionPlan.PRO) {
+            return requested;
+        }
+        throw new IllegalArgumentException("Plan no válido. Elige BASIC o PRO.");
     }
 }

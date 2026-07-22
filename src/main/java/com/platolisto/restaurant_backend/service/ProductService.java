@@ -5,7 +5,9 @@ import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Category;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.CategoryRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
@@ -40,6 +42,17 @@ public class ProductService {
         Long restaurantId = requireRestaurantId();
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+
+        long activeCount = productRepository.countByRestaurant_Id(restaurantId);
+        SubscriptionPlan plan = restaurant.getPlan() != null
+                ? restaurant.getPlan()
+                : SubscriptionPlan.BASIC;
+        if (!PlanLimits.canCreateProduct(plan, activeCount)) {
+            throw new IllegalArgumentException(
+                    "El Plan Básico permite hasta " + PlanLimits.BASIC_MAX_PRODUCTS
+                            + " platillos. Actualiza a Pro para menú ilimitado."
+            );
+        }
 
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new IllegalArgumentException("La categoría asociada no existe."));
