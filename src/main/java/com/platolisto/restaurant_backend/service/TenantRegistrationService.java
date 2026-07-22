@@ -50,6 +50,7 @@ public class TenantRegistrationService {
                 .name(request.getRestaurantName().trim())
                 .subdomain(slug)
                 .isActive(true)
+                .websitePublished(true)
                 .build());
 
         userRepository.save(User.builder()

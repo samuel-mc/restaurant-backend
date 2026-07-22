@@ -25,5 +25,6 @@ public class RestaurantProfileResponse {
     private boolean hasDelivery;
     private boolean hasPickup;
     private boolean hasReservations;
+    private boolean websitePublished;
     private OffsetDateTime updatedAt;
 }

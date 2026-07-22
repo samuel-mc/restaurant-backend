@@ -47,6 +47,7 @@ public class RestaurantProfileController {
             @RequestParam(value = "hasDelivery", required = false) Boolean hasDelivery,
             @RequestParam(value = "hasPickup", required = false) Boolean hasPickup,
             @RequestParam(value = "hasReservations", required = false) Boolean hasReservations,
+            @RequestParam(value = "websitePublished", required = false) Boolean websitePublished,
             @RequestParam(value = "logo", required = false) MultipartFile logo,
             @RequestParam(value = "banner", required = false) MultipartFile banner
     ) {
@@ -62,6 +63,7 @@ public class RestaurantProfileController {
                 .hasDelivery(hasDelivery)
                 .hasPickup(hasPickup)
                 .hasReservations(hasReservations)
+                .websitePublished(websitePublished)
                 .build();
 
         return ResponseEntity.ok(restaurantProfileService.updateProfile(request, logo, banner));

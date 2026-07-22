@@ -71,6 +71,9 @@ public class RestaurantProfileService {
         if (request.getHasReservations() != null) {
             restaurant.setHasReservations(request.getHasReservations());
         }
+        if (request.getWebsitePublished() != null) {
+            restaurant.setWebsitePublished(request.getWebsitePublished());
+        }
 
         String slug = restaurant.getSubdomain();
         if (logo != null && !logo.isEmpty()) {
@@ -132,6 +135,7 @@ public class RestaurantProfileService {
                 .hasDelivery(restaurant.isHasDelivery())
                 .hasPickup(restaurant.isHasPickup())
                 .hasReservations(restaurant.isHasReservations())
+                .websitePublished(restaurant.isWebsitePublished())
                 .updatedAt(restaurant.getUpdatedAt())
                 .build();
     }

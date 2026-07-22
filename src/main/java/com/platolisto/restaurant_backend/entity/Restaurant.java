@@ -68,6 +68,11 @@ public class Restaurant {
     @Column(name = "has_reservations", nullable = false)
     private boolean hasReservations = false;
 
+    /** Si el website institucional del tenant está visible al público. */
+    @Builder.Default
+    @Column(name = "website_published", nullable = false)
+    private boolean websitePublished = false;
+
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
