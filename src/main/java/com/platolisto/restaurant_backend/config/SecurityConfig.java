@@ -38,6 +38,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Rutas públicas de Autenticación y Menú del Comensal
                 .requestMatchers("/api/v1/auth/login").permitAll()
+                .requestMatchers("/api/v1/superadmin/auth/login").permitAll()
                 .requestMatchers("/api/v1/tenants/register").permitAll()
                 .requestMatchers("/api/v1/menu/**").permitAll()
                 .requestMatchers("/api/v1/orders/**").permitAll()
@@ -47,6 +48,9 @@ public class SecurityConfig {
                 .requestMatchers("/error").permitAll()
                 // Imágenes de productos (local hoy; R2 CDN mañana)
                 .requestMatchers("/media/**").permitAll()
+
+                // Backoffice global de la plataforma
+                .requestMatchers("/api/v1/superadmin/**").hasRole("SUPER_ADMIN")
                 
                 // Rutas del panel administrativo protegidas por rol
                 .requestMatchers("/api/v1/admin/**").hasAnyRole("OWNER", "ADMIN")

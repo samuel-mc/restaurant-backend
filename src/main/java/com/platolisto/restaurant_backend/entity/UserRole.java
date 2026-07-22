@@ -4,5 +4,7 @@ public enum UserRole {
     OWNER,
     ADMIN,
     CASHIER,
-    KITCHEN
+    KITCHEN,
+    /** Operador global de la plataforma (sin tenant). */
+    SUPER_ADMIN
 }

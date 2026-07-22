@@ -1,0 +1,209 @@
+package com.platolisto.restaurant_backend.service;
+
+import com.platolisto.restaurant_backend.dto.LoginRequest;
+import com.platolisto.restaurant_backend.dto.LoginResponse;
+import com.platolisto.restaurant_backend.dto.superadmin.ImpersonateResponse;
+import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminMetricsResponse;
+import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminTenantResponse;
+import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
+import com.platolisto.restaurant_backend.entity.User;
+import com.platolisto.restaurant_backend.entity.UserRole;
+import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+import com.platolisto.restaurant_backend.repository.UserRepository;
+import com.platolisto.restaurant_backend.security.JwtService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class SuperAdminService {
+
+    private static final long PRO_MONTHLY_MXN = 999L;
+
+    private final RestaurantRepository restaurantRepository;
+    private final UserRepository userRepository;
+    private final JwtService jwtService;
+    private final UserDetailsService userDetailsService;
+    private final AuthenticationManager authenticationManager;
+
+    public LoginResponse login(LoginRequest request) {
+        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(email, request.getPassword())
+        );
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado."));
+
+        if (user.getRole() != UserRole.SUPER_ADMIN) {
+            throw new IllegalArgumentException("Esta cuenta no tiene acceso al backoffice global.");
+        }
+        if (!user.isActive()) {
+            throw new IllegalArgumentException("La cuenta de superadmin está desactivada.");
+        }
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
+        String token = jwtService.generateToken(userDetails, null, UserRole.SUPER_ADMIN.name());
+
+        log.info("SuperAdmin login: {}", email);
+        return LoginResponse.builder().token(token).build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SuperAdminTenantResponse> listTenants() {
+        return restaurantRepository.findAll().stream()
+                .sorted(Comparator.comparing(Restaurant::getCreatedAt).reversed())
+                .map(this::toTenantResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public SuperAdminTenantResponse updateTenantStatus(Long id, boolean active) {
+        Restaurant restaurant = restaurantRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Restaurante no encontrado."));
+        restaurant.setActive(active);
+        Restaurant saved = restaurantRepository.save(restaurant);
+        log.info("Tenant {} marcado active={}", saved.getSubdomain(), active);
+        return toTenantResponse(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public ImpersonateResponse impersonate(Long restaurantId) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new IllegalArgumentException("Restaurante no encontrado."));
+
+        if (!restaurant.isActive()) {
+            throw new IllegalArgumentException(
+                    "No se puede ingresar a un restaurante suspendido. Actívalo primero."
+            );
+        }
+
+        User owner = userRepository
+                .findFirstByRestaurantIdAndRoleAndIsActiveTrueOrderByIdAsc(
+                        restaurantId, UserRole.OWNER
+                )
+                .or(() -> userRepository.findFirstByRestaurantIdAndRoleAndIsActiveTrueOrderByIdAsc(
+                        restaurantId, UserRole.ADMIN
+                ))
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No hay un OWNER/ADMIN activo para impersonar en este restaurante."
+                ));
+
+        UserDetails userDetails = org.springframework.security.core.userdetails.User.builder()
+                .username(owner.getEmail())
+                .password(owner.getPasswordHash())
+                .authorities("ROLE_" + owner.getRole().name())
+                .build();
+
+        String token = jwtService.generateToken(
+                userDetails,
+                restaurant.getId(),
+                owner.getRole().name()
+        );
+
+        log.info(
+                "Impersonación: restaurant={} as user={}",
+                restaurant.getSubdomain(),
+                owner.getEmail()
+        );
+
+        return ImpersonateResponse.builder()
+                .token(token)
+                .tenantSlug(restaurant.getSubdomain())
+                .restaurantName(restaurant.getName())
+                .loginPath("/admin/dashboard")
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public SuperAdminMetricsResponse metrics() {
+        List<Restaurant> all = restaurantRepository.findAll();
+        long total = all.size();
+        long active = all.stream().filter(Restaurant::isActive).count();
+        long suspended = total - active;
+        long pro = all.stream()
+                .filter(r -> r.getPlan() == SubscriptionPlan.PRO)
+                .count();
+        long basic = total - pro;
+        long mrr = all.stream()
+                .filter(Restaurant::isActive)
+                .filter(r -> r.getPlan() == SubscriptionPlan.PRO)
+                .count() * PRO_MONTHLY_MXN;
+        double churn = total == 0 ? 0.0 : (suspended * 100.0) / total;
+
+        return SuperAdminMetricsResponse.builder()
+                .totalTenants(total)
+                .activeTenants(active)
+                .suspendedTenants(suspended)
+                .proTenants(pro)
+                .basicTenants(basic)
+                .estimatedMrr(mrr)
+                .churnRate(Math.round(churn * 10.0) / 10.0)
+                .registrationGrowth(buildRegistrationGrowth(all))
+                .build();
+    }
+
+    private List<SuperAdminMetricsResponse.RegistrationPoint> buildRegistrationGrowth(
+            List<Restaurant> all
+    ) {
+        YearMonth now = YearMonth.now();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM");
+        Map<String, Long> byMonth = all.stream()
+                .filter(r -> r.getCreatedAt() != null)
+                .collect(Collectors.groupingBy(
+                        r -> YearMonth.from(r.getCreatedAt()).format(fmt),
+                        Collectors.counting()
+                ));
+
+        List<SuperAdminMetricsResponse.RegistrationPoint> points = new ArrayList<>();
+        for (int i = 5; i >= 0; i--) {
+            YearMonth ym = now.minusMonths(i);
+            String key = ym.format(fmt);
+            points.add(SuperAdminMetricsResponse.RegistrationPoint.builder()
+                    .month(key)
+                    .count(byMonth.getOrDefault(key, 0L))
+                    .build());
+        }
+        return points;
+    }
+
+    private SuperAdminTenantResponse toTenantResponse(Restaurant r) {
+        return SuperAdminTenantResponse.builder()
+                .id(r.getId())
+                .name(r.getName())
+                .subdomain(r.getSubdomain())
+                .plan(r.getPlan() != null ? r.getPlan().name() : "BASIC")
+                .paymentStatus(r.getPaymentStatus() != null
+                        ? r.getPaymentStatus().name()
+                        : "ACTIVE")
+                .active(r.isActive())
+                .websitePublished(r.isWebsitePublished())
+                .createdAt(format(r.getCreatedAt()))
+                .updatedAt(format(r.getUpdatedAt()))
+                .build();
+    }
+
+    private static String format(OffsetDateTime value) {
+        return value == null ? null : value.toString();
+    }
+}
