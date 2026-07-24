@@ -36,5 +36,6 @@ public class RestaurantProfileRequest {
     private Boolean hasDelivery;
     private Boolean hasPickup;
     private Boolean hasReservations;
+    private Boolean orderingEnabled;
     private Boolean websitePublished;
 }

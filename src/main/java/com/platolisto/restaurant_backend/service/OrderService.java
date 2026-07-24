@@ -46,6 +46,12 @@ public class OrderService {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
 
+        if (!restaurant.isOrderingEnabled()) {
+            throw new IllegalArgumentException(
+                    "Este restaurante no acepta pedidos desde el menú digital. El menú es solo consulta."
+            );
+        }
+
         validateOrderTypeAllowed(restaurant, request.getOrderType());
 
         // Inicializar Pedido

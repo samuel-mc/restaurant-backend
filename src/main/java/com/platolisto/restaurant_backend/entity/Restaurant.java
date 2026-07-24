@@ -68,6 +68,13 @@ public class Restaurant {
     @Column(name = "has_reservations", nullable = false)
     private boolean hasReservations = false;
 
+    /**
+     * Si el menú digital acepta pedidos. Si es {@code false}, el menú es solo consulta.
+     */
+    @Builder.Default
+    @Column(name = "ordering_enabled", nullable = false)
+    private boolean orderingEnabled = true;
+
     /** Si el website institucional del tenant está visible al público. */
     @Builder.Default
     @Column(name = "website_published", nullable = false)

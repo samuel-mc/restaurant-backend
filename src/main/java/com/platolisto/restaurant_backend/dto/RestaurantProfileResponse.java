@@ -25,6 +25,7 @@ public class RestaurantProfileResponse {
     private boolean hasDelivery;
     private boolean hasPickup;
     private boolean hasReservations;
+    private boolean orderingEnabled;
     private boolean websitePublished;
     private String plan;
     private String paymentStatus;

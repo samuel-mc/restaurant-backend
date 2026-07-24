@@ -74,6 +74,9 @@ public class RestaurantProfileService {
         if (request.getHasReservations() != null) {
             restaurant.setHasReservations(request.getHasReservations());
         }
+        if (request.getOrderingEnabled() != null) {
+            restaurant.setOrderingEnabled(request.getOrderingEnabled());
+        }
         if (request.getWebsitePublished() != null) {
             SubscriptionPlan plan = restaurant.getPlan() != null
                     ? restaurant.getPlan()
@@ -151,6 +154,7 @@ public class RestaurantProfileService {
                 .hasDelivery(restaurant.isHasDelivery())
                 .hasPickup(restaurant.isHasPickup())
                 .hasReservations(restaurant.isHasReservations())
+                .orderingEnabled(restaurant.isOrderingEnabled())
                 .websitePublished(restaurant.isWebsitePublished())
                 .plan(restaurant.getPlan() != null ? restaurant.getPlan().name() : "BASIC")
                 .paymentStatus(restaurant.getPaymentStatus() != null
