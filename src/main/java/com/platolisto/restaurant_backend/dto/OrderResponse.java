@@ -15,6 +15,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class OrderResponse {
+    /** ID interno para display en caja (#101). */
+    private Long id;
     private UUID uuid;
     private String customerName;
     private String customerPhone;
@@ -24,5 +26,6 @@ public class OrderResponse {
     private OrderStatus status;
     private BigDecimal totalAmount;
     private OffsetDateTime createdAt;
+    private OffsetDateTime updatedAt;
     private List<OrderDetailResponse> details;
 }

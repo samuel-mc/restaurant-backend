@@ -5,6 +5,7 @@ import com.platolisto.restaurant_backend.entity.OrderStatus;
 import com.platolisto.restaurant_backend.entity.OrderType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -16,7 +17,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface OrderRepository extends JpaRepository<Order, Long> {
+public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecificationExecutor<Order> {
     Optional<Order> findByUuid(UUID uuid);
 
     /**
@@ -55,6 +56,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.uuid = :uuid
             """)
     Optional<Order> findByUuidWithDetails(@Param("uuid") UUID uuid);
+
+    /** Hidrata líneas + producto tras una consulta paginada (evita JOIN FETCH + Page). */
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            LEFT JOIN FETCH o.details d
+            LEFT JOIN FETCH d.product
+            WHERE o.id IN :ids
+            """)
+    List<Order> findByIdInWithDetails(@Param("ids") Collection<Long> ids);
 
     @Query("""
             SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o)

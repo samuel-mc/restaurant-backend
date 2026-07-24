@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.dto.ActiveSessionResponse;
+import com.platolisto.restaurant_backend.dto.AdminOrderListFilter;
 import com.platolisto.restaurant_backend.dto.OrderDetailRequest;
 import com.platolisto.restaurant_backend.dto.OrderDetailResponse;
 import com.platolisto.restaurant_backend.dto.OrderRequest;
@@ -16,8 +17,13 @@ import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.repository.OrderRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +32,9 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -306,6 +314,85 @@ public class OrderService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Listado paginado para panel de cuentas.
+     * Prioridad: {@code filter} de UI; si no, {@code status}/{@code orderType} sueltos.
+     */
+    @Transactional(readOnly = true)
+    public Page<OrderResponse> listOrders(
+            AdminOrderListFilter filter,
+            OrderStatus status,
+            OrderType orderType,
+            Pageable pageable
+    ) {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        List<OrderStatus> statuses = null;
+        OrderType resolvedType = orderType;
+
+        if (filter != null) {
+            switch (filter) {
+                case OPEN -> {
+                    statuses = OPEN_STATUSES;
+                    resolvedType = OrderType.IN_TABLE;
+                }
+                case CLOSED -> {
+                    statuses = List.of(OrderStatus.CLOSED);
+                    resolvedType = null;
+                }
+                case PICKUP -> {
+                    statuses = null;
+                    resolvedType = OrderType.PICKUP;
+                }
+                case ALL -> {
+                    statuses = null;
+                    resolvedType = null;
+                }
+            }
+        } else if (status != null) {
+            statuses = List.of(status);
+        }
+
+        List<OrderStatus> statusFilter = statuses;
+        OrderType typeFilter = resolvedType;
+
+        Specification<Order> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (statusFilter != null && !statusFilter.isEmpty()) {
+                predicates.add(root.get("status").in(statusFilter));
+            }
+            if (typeFilter != null) {
+                predicates.add(cb.equal(root.get("orderType"), typeFilter));
+            }
+            if (query != null) {
+                query.distinct(true);
+            }
+            if (predicates.isEmpty()) {
+                return cb.conjunction();
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+
+        Page<Order> page = orderRepository.findAll(spec, pageable);
+        List<Order> content = page.getContent();
+        if (content.isEmpty()) {
+            return page.map(this::mapToResponse);
+        }
+
+        List<Long> ids = content.stream().map(Order::getId).toList();
+        Map<Long, Order> hydratedById = orderRepository.findByIdInWithDetails(ids).stream()
+                .collect(Collectors.toMap(Order::getId, Function.identity(), (a, b) -> a));
+
+        List<OrderResponse> responses = content.stream()
+                .map(order -> mapToResponse(hydratedById.getOrDefault(order.getId(), order)))
+                .toList();
+
+        return new PageImpl<>(responses, pageable, page.getTotalElements());
+    }
+
     @Transactional(readOnly = true)
     public OrderResponse getOrderByUuid(UUID uuid) {
         Long restaurantId = TenantContext.getCurrentTenant();
@@ -461,6 +548,7 @@ public class OrderService {
                 .collect(Collectors.toList());
 
         return OrderResponse.builder()
+                .id(order.getId())
                 .uuid(order.getUuid())
                 .customerName(order.getCustomerName())
                 .customerPhone(order.getCustomerPhone())
@@ -470,6 +558,7 @@ public class OrderService {
                 .status(order.getStatus())
                 .totalAmount(order.getTotalAmount())
                 .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
                 .details(detailsResponse)
                 .build();
     }
