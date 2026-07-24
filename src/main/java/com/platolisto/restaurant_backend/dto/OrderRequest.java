@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -31,6 +32,12 @@ public class OrderRequest {
     private String tableNumber;
 
     private String deliveryAddress;
+
+    /**
+     * UUID de una orden activa de la mesa (sesión del comensal).
+     * Si está presente y la orden sigue abierta, se agrega una nueva ronda.
+     */
+    private UUID activeOrderUuid;
 
     @NotEmpty(message = "El pedido debe contener al menos un producto")
     @Valid

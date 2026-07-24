@@ -2,6 +2,7 @@ package com.platolisto.restaurant_backend.repository;
 
 import com.platolisto.restaurant_backend.entity.Order;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
+import com.platolisto.restaurant_backend.entity.OrderType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -28,6 +29,32 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.status IN :statuses
             """)
     List<Order> findActiveWithDetails(@Param("statuses") Collection<OrderStatus> statuses);
+
+    /**
+     * Órdenes abiertas de una mesa (IN_TABLE) para fusionar adiciones en el mismo ticket.
+     * "Abierta" = PENDING | ACCEPTED | IN_KITCHEN (equivalente a OPEN del dominio).
+     */
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            LEFT JOIN FETCH o.details d
+            LEFT JOIN FETCH d.product
+            WHERE o.orderType = :orderType
+              AND o.status IN :statuses
+              AND LOWER(TRIM(o.tableNumber)) = LOWER(TRIM(:tableNumber))
+            """)
+    List<Order> findOpenInTableWithDetails(
+            @Param("tableNumber") String tableNumber,
+            @Param("orderType") OrderType orderType,
+            @Param("statuses") Collection<OrderStatus> statuses
+    );
+
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            LEFT JOIN FETCH o.details d
+            LEFT JOIN FETCH d.product
+            WHERE o.uuid = :uuid
+            """)
+    Optional<Order> findByUuidWithDetails(@Param("uuid") UUID uuid);
 
     @Query("""
             SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o)

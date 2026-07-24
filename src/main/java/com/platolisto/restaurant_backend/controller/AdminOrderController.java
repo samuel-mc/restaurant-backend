@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.controller;
 
 import com.platolisto.restaurant_backend.dto.OrderStatusRequest;
+import com.platolisto.restaurant_backend.dto.OrderItemStatusRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
 import com.platolisto.restaurant_backend.service.OrderService;
 import jakarta.validation.Valid;
@@ -31,5 +32,23 @@ public class AdminOrderController {
     ) {
         OrderResponse response = orderService.updateOrderStatus(uuid, request.getStatus());
         return ResponseEntity.ok(response);
+    }
+
+    /** Cierra y cobra la cuenta (libera la mesa). */
+    @PatchMapping("/{uuid}/close")
+    public ResponseEntity<OrderResponse> closeOrder(@PathVariable UUID uuid) {
+        return ResponseEntity.ok(orderService.closeOrder(uuid));
+    }
+
+    /** Actualiza el estado de un ítem individual (p. ej. marcar un platillo como entregado). */
+    @PatchMapping("/{uuid}/items/{detailId}/status")
+    public ResponseEntity<OrderResponse> updateOrderItemStatus(
+            @PathVariable UUID uuid,
+            @PathVariable Long detailId,
+            @Valid @RequestBody OrderItemStatusRequest request
+    ) {
+        return ResponseEntity.ok(
+                orderService.updateOrderItemStatus(uuid, detailId, request.getStatus())
+        );
     }
 }

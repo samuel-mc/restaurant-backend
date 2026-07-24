@@ -1,5 +1,6 @@
 package com.platolisto.restaurant_backend.controller;
 
+import com.platolisto.restaurant_backend.dto.ActiveSessionResponse;
 import com.platolisto.restaurant_backend.dto.OrderRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
 import com.platolisto.restaurant_backend.service.OrderService;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -27,6 +29,21 @@ public class PublicOrderController {
     public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody OrderRequest request) {
         OrderResponse response = orderService.createOrder(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Sesión activa de una mesa (cuenta abierta).
+     * El tenant se resuelve por cabecera {@code X-Tenant}.
+     */
+    @GetMapping("/active-session")
+    public ResponseEntity<ActiveSessionResponse> getActiveSession(
+            @RequestParam("tableNumber") String tableNumber
+    ) {
+        ActiveSessionResponse session = orderService.getActiveSessionByTable(tableNumber);
+        if (!session.isHasActiveOrder()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(session);
     }
 
     /** Estado inicial del pedido para la pantalla de tracking del comensal. */

@@ -1,11 +1,13 @@
 package com.platolisto.restaurant_backend.service;
 
+import com.platolisto.restaurant_backend.dto.ActiveSessionResponse;
 import com.platolisto.restaurant_backend.dto.OrderDetailRequest;
 import com.platolisto.restaurant_backend.dto.OrderDetailResponse;
 import com.platolisto.restaurant_backend.dto.OrderRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
 import com.platolisto.restaurant_backend.entity.Order;
 import com.platolisto.restaurant_backend.entity.OrderDetail;
+import com.platolisto.restaurant_backend.entity.OrderItemStatus;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
 import com.platolisto.restaurant_backend.entity.OrderType;
 import com.platolisto.restaurant_backend.entity.Product;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -30,6 +33,21 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class OrderService {
+
+    private static final List<OrderStatus> OPEN_STATUSES = List.of(
+            OrderStatus.PENDING,
+            OrderStatus.ACCEPTED,
+            OrderStatus.IN_KITCHEN,
+            OrderStatus.DELIVERED
+    );
+
+    /** Comandas visibles en el monitor de cocina / caja (hasta cobro). */
+    private static final List<OrderStatus> KITCHEN_ACTIVE_STATUSES = List.of(
+            OrderStatus.PENDING,
+            OrderStatus.ACCEPTED,
+            OrderStatus.IN_KITCHEN,
+            OrderStatus.DELIVERED
+    );
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
@@ -54,63 +72,227 @@ public class OrderService {
 
         validateOrderTypeAllowed(restaurant, request.getOrderType());
 
-        // Inicializar Pedido
+        Order openOrder = findOpenOrderForAddition(request, restaurantId);
+        if (openOrder != null) {
+            return appendRound(openOrder, request, restaurantId, restaurant);
+        }
+
+        return createFreshOrder(request, restaurantId, restaurant);
+    }
+
+    private OrderResponse createFreshOrder(
+            OrderRequest request,
+            Long restaurantId,
+            Restaurant restaurant
+    ) {
         Order order = Order.builder()
                 .restaurant(restaurant)
                 .customerName(request.getCustomerName())
                 .customerPhone(request.getCustomerPhone())
                 .orderType(request.getOrderType())
-                .tableNumber(request.getTableNumber())
+                .tableNumber(normalizeTable(request.getTableNumber()))
                 .deliveryAddress(request.getDeliveryAddress())
                 .status(OrderStatus.PENDING)
                 .totalAmount(BigDecimal.ZERO)
                 .details(new ArrayList<>())
                 .build();
 
-        BigDecimal calculatedTotal = BigDecimal.ZERO;
-
-        for (OrderDetailRequest detailRequest : request.getDetails()) {
-            Product product = productRepository.findByUuid(detailRequest.getProductUuid())
-                    .orElseThrow(() -> new IllegalArgumentException("El producto con UUID " + detailRequest.getProductUuid() + " no existe."));
-
-            // Validar que el producto pertenezca al restaurante actual
-            if (!product.getRestaurant().getId().equals(restaurantId)) {
-                throw new IllegalArgumentException("El producto con UUID " + detailRequest.getProductUuid() + " no pertenece al restaurante actual.");
-            }
-
-            // Validar que el producto esté disponible y no eliminado
-            if (product.isDeleted() || !product.isAvailable()) {
-                throw new IllegalArgumentException("El producto " + product.getName() + " no está disponible en este momento.");
-            }
-
-            BigDecimal unitPrice = product.getPrice();
-            BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(detailRequest.getQuantity()));
-            calculatedTotal = calculatedTotal.add(subtotal);
-
-            OrderDetail detail = OrderDetail.builder()
-                    .product(product)
-                    .quantity(detailRequest.getQuantity())
-                    .unitPrice(unitPrice)
-                    .notes(detailRequest.getNotes())
-                    .build();
-
-            order.addDetail(detail);
-        }
-
+        BigDecimal calculatedTotal = addDetailsToOrder(order, request.getDetails(), restaurantId, 1);
         order.setTotalAmount(calculatedTotal);
 
         Order savedOrder = orderRepository.save(order);
-        log.info("Pedido creado con éxito: ID {}, UUID {}, Total {}", savedOrder.getId(), savedOrder.getUuid(), savedOrder.getTotalAmount());
+        log.info(
+                "Pedido creado: UUID={}, mesa={}, total={}",
+                savedOrder.getUuid(),
+                savedOrder.getTableNumber(),
+                savedOrder.getTotalAmount()
+        );
 
         OrderResponse response = mapToResponse(savedOrder);
         publishOrderEvents(restaurant, response);
         return response;
     }
 
+    private OrderResponse appendRound(
+            Order order,
+            OrderRequest request,
+            Long restaurantId,
+            Restaurant restaurant
+    ) {
+        int nextBatch = order.getDetails().stream()
+                .mapToInt(OrderDetail::getBatchNumber)
+                .max()
+                .orElse(0) + 1;
+
+        BigDecimal added = addDetailsToOrder(order, request.getDetails(), restaurantId, nextBatch);
+        order.setTotalAmount(order.getTotalAmount().add(added));
+
+        // Trae la comanda a "Recibidos" para que cocina note la adición.
+        if (order.getStatus() == OrderStatus.ACCEPTED
+                || order.getStatus() == OrderStatus.IN_KITCHEN
+                || order.getStatus() == OrderStatus.DELIVERED) {
+            order.setStatus(OrderStatus.PENDING);
+        }
+
+        Order saved = orderRepository.save(order);
+        log.info(
+                "Adición ronda {} a pedido UUID={}, +{}, total={}",
+                nextBatch,
+                saved.getUuid(),
+                added,
+                saved.getTotalAmount()
+        );
+
+        OrderResponse response = mapToResponse(saved);
+        publishOrderEvents(restaurant, response);
+        return response;
+    }
+
+    private BigDecimal addDetailsToOrder(
+            Order order,
+            List<OrderDetailRequest> detailRequests,
+            Long restaurantId,
+            int batchNumber
+    ) {
+        BigDecimal added = BigDecimal.ZERO;
+        for (OrderDetailRequest detailRequest : detailRequests) {
+            Product product = productRepository.findByUuid(detailRequest.getProductUuid())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "El producto con UUID " + detailRequest.getProductUuid() + " no existe."
+                    ));
+
+            if (!product.getRestaurant().getId().equals(restaurantId)) {
+                throw new IllegalArgumentException(
+                        "El producto con UUID " + detailRequest.getProductUuid()
+                                + " no pertenece al restaurante actual."
+                );
+            }
+            if (product.isDeleted() || !product.isAvailable()) {
+                throw new IllegalArgumentException(
+                        "El producto " + product.getName() + " no está disponible en este momento."
+                );
+            }
+
+            BigDecimal unitPrice = product.getPrice();
+            BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(detailRequest.getQuantity()));
+            added = added.add(subtotal);
+
+            OrderDetail detail = OrderDetail.builder()
+                    .product(product)
+                    .quantity(detailRequest.getQuantity())
+                    .unitPrice(unitPrice)
+                    .notes(detailRequest.getNotes())
+                    .batchNumber(batchNumber)
+                    .status(OrderItemStatus.PENDING)
+                    .build();
+
+            order.addDetail(detail);
+        }
+        return added;
+    }
+
     /**
-     * Pedidos activos para el monitor de cocina/caja
-     * (PENDING, ACCEPTED, IN_KITCHEN) del tenant actual.
+     * Busca orden abierta: primero por UUID de sesión; si no, por mesa (IN_TABLE).
      */
+    private Order findOpenOrderForAddition(OrderRequest request, Long restaurantId) {
+        if (request.getActiveOrderUuid() != null) {
+            Order byUuid = orderRepository.findByUuidWithDetails(request.getActiveOrderUuid())
+                    .orElse(null);
+            if (byUuid != null
+                    && byUuid.getRestaurant().getId().equals(restaurantId)
+                    && OPEN_STATUSES.contains(byUuid.getStatus())) {
+                return byUuid;
+            }
+        }
+
+        if (request.getOrderType() != OrderType.IN_TABLE) {
+            return null;
+        }
+
+        String table = normalizeTable(request.getTableNumber());
+        if (table == null) {
+            return null;
+        }
+
+        return orderRepository
+                .findOpenInTableWithDetails(table, OrderType.IN_TABLE, OPEN_STATUSES)
+                .stream()
+                .max(Comparator.comparing(Order::getCreatedAt))
+                .orElse(null);
+    }
+
+    private static String normalizeTable(String tableNumber) {
+        if (tableNumber == null) {
+            return null;
+        }
+        String trimmed = tableNumber.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    @Transactional(readOnly = true)
+    public ActiveSessionResponse getActiveSessionByTable(String tableNumber) {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        String table = normalizeTable(tableNumber);
+        if (table == null) {
+            return ActiveSessionResponse.builder().hasActiveOrder(false).build();
+        }
+
+        Order open = orderRepository
+                .findOpenInTableWithDetails(table, OrderType.IN_TABLE, OPEN_STATUSES)
+                .stream()
+                .max(Comparator.comparing(Order::getCreatedAt))
+                .orElse(null);
+
+        if (open == null || !open.getRestaurant().getId().equals(restaurantId)) {
+            return ActiveSessionResponse.builder().hasActiveOrder(false).build();
+        }
+
+        return ActiveSessionResponse.builder()
+                .hasActiveOrder(true)
+                .order(mapToResponse(open))
+                .build();
+    }
+
+    @Transactional
+    public OrderResponse closeOrder(UUID uuid) {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        Order order = orderRepository.findByUuidWithDetails(uuid)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid));
+
+        if (!order.getRestaurant().getId().equals(restaurantId)) {
+            throw new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid);
+        }
+
+        if (order.getStatus() == OrderStatus.CLOSED) {
+            return mapToResponse(order);
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new IllegalArgumentException("No se puede cerrar un pedido cancelado.");
+        }
+
+        order.setStatus(OrderStatus.CLOSED);
+        for (OrderDetail detail : order.getDetails()) {
+            if (detail.getStatus() != OrderItemStatus.DELIVERED) {
+                detail.setStatus(OrderItemStatus.DELIVERED);
+            }
+        }
+
+        Order saved = orderRepository.save(order);
+        log.info("Cuenta cerrada (CLOSED): UUID={}, mesa={}", saved.getUuid(), saved.getTableNumber());
+
+        OrderResponse response = mapToResponse(saved);
+        publishOrderEvents(saved.getRestaurant(), response);
+        return response;
+    }
+
     @Transactional(readOnly = true)
     public List<OrderResponse> getActiveOrders() {
         Long restaurantId = TenantContext.getCurrentTenant();
@@ -118,22 +300,12 @@ public class OrderService {
             throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
         }
 
-        List<OrderStatus> activeStatuses = List.of(
-                OrderStatus.PENDING,
-                OrderStatus.ACCEPTED,
-                OrderStatus.IN_KITCHEN
-        );
-
-        return orderRepository.findActiveWithDetails(activeStatuses).stream()
-                .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
+        return orderRepository.findActiveWithDetails(KITCHEN_ACTIVE_STATUSES).stream()
+                .sorted(Comparator.comparing(Order::getCreatedAt))
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Consulta pública de un pedido por UUID, acotada al tenant actual.
-     * Usada por la pantalla de tracking del comensal para el estado inicial.
-     */
     @Transactional(readOnly = true)
     public OrderResponse getOrderByUuid(UUID uuid) {
         Long restaurantId = TenantContext.getCurrentTenant();
@@ -141,7 +313,7 @@ public class OrderService {
             throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
         }
 
-        Order order = orderRepository.findByUuid(uuid)
+        Order order = orderRepository.findByUuidWithDetails(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid));
 
         if (!order.getRestaurant().getId().equals(restaurantId)) {
@@ -157,7 +329,6 @@ public class OrderService {
         }
         switch (orderType) {
             case IN_TABLE -> {
-                // En salón siempre permitido.
             }
             case PICKUP -> {
                 if (!restaurant.isHasPickup()) {
@@ -183,7 +354,7 @@ public class OrderService {
             throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
         }
 
-        Order order = orderRepository.findByUuid(uuid)
+        Order order = orderRepository.findByUuidWithDetails(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid));
 
         if (!order.getRestaurant().getId().equals(restaurantId)) {
@@ -191,6 +362,22 @@ public class OrderService {
         }
 
         order.setStatus(status);
+
+        // Al marcar la orden completa como entregada o cerrada, cierra ítems pendientes.
+        if (status == OrderStatus.DELIVERED || status == OrderStatus.CLOSED) {
+            for (OrderDetail detail : order.getDetails()) {
+                if (detail.getStatus() != OrderItemStatus.DELIVERED) {
+                    detail.setStatus(OrderItemStatus.DELIVERED);
+                }
+            }
+        } else if (status == OrderStatus.IN_KITCHEN || status == OrderStatus.ACCEPTED) {
+            for (OrderDetail detail : order.getDetails()) {
+                if (detail.getStatus() == OrderItemStatus.PENDING) {
+                    detail.setStatus(OrderItemStatus.PREPARING);
+                }
+            }
+        }
+
         Order updatedOrder = orderRepository.save(order);
         log.info("Estado del pedido actualizado a {}: UUID {}", status, uuid);
 
@@ -199,38 +386,78 @@ public class OrderService {
         return response;
     }
 
-    /**
-     * Notifica a cocina (por id y por slug) y al comensal (por UUID del pedido).
-     */
+    @Transactional
+    public OrderResponse updateOrderItemStatus(UUID orderUuid, Long detailId, OrderItemStatus status) {
+        if (status == null) {
+            throw new IllegalArgumentException("El estado del ítem es requerido.");
+        }
+
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        Order order = orderRepository.findByUuidWithDetails(orderUuid)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró el pedido con UUID: " + orderUuid));
+
+        if (!order.getRestaurant().getId().equals(restaurantId)) {
+            throw new IllegalArgumentException("No se encontró el pedido con UUID: " + orderUuid);
+        }
+
+        OrderDetail detail = order.getDetails().stream()
+                .filter(d -> d.getId().equals(detailId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró el ítem en el pedido."));
+
+        detail.setStatus(status);
+        Order saved = orderRepository.save(order);
+        log.info(
+                "Ítem {} del pedido {} → {}",
+                detailId,
+                orderUuid,
+                status
+        );
+
+        OrderResponse response = mapToResponse(saved);
+        publishOrderEvents(saved.getRestaurant(), response);
+        return response;
+    }
+
     private void publishOrderEvents(Restaurant restaurant, OrderResponse response) {
         Long restaurantId = restaurant.getId();
         String slug = restaurant.getSubdomain();
 
         String kitchenById = "/topic/restaurants/" + restaurantId + "/orders";
         messagingTemplate.convertAndSend(kitchenById, response);
-        log.info("Notificación WebSocket enviada a {}", kitchenById);
 
         if (slug != null && !slug.isBlank()) {
             String kitchenBySlug = "/topic/admin/" + slug + "/orders";
             messagingTemplate.convertAndSend(kitchenBySlug, response);
-            log.info("Notificación WebSocket admin enviada a {}", kitchenBySlug);
         }
 
         String trackingTopic = "/topic/order/" + response.getUuid();
         messagingTemplate.convertAndSend(trackingTopic, response);
-        log.info("Notificación WebSocket de tracking enviada a {}", trackingTopic);
     }
 
     private OrderResponse mapToResponse(Order order) {
         List<OrderDetailResponse> detailsResponse = order.getDetails().stream()
-                .map(detail -> OrderDetailResponse.builder()
-                        .productUuid(detail.getProduct().getUuid())
-                        .productName(detail.getProduct().getName())
-                        .quantity(detail.getQuantity())
-                        .unitPrice(detail.getUnitPrice())
-                        .subtotal(detail.getUnitPrice().multiply(BigDecimal.valueOf(detail.getQuantity())))
-                        .notes(detail.getNotes())
-                        .build())
+                .sorted(Comparator
+                        .comparingInt(OrderDetail::getBatchNumber)
+                        .thenComparing(OrderDetail::getId, Comparator.nullsLast(Long::compareTo)))
+                .map(detail -> {
+                    Product product = detail.getProduct();
+                    return OrderDetailResponse.builder()
+                            .id(detail.getId())
+                            .productUuid(product != null ? product.getUuid() : null)
+                            .productName(product != null ? product.getName() : "Producto no disponible")
+                            .quantity(detail.getQuantity())
+                            .unitPrice(detail.getUnitPrice())
+                            .subtotal(detail.getUnitPrice().multiply(BigDecimal.valueOf(detail.getQuantity())))
+                            .notes(detail.getNotes())
+                            .batchNumber(detail.getBatchNumber())
+                            .status(detail.getStatus() != null ? detail.getStatus() : OrderItemStatus.PENDING)
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         return OrderResponse.builder()

@@ -2,6 +2,8 @@ package com.platolisto.restaurant_backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 import java.math.BigDecimal;
 
@@ -22,7 +24,13 @@ public class OrderDetail {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    /**
+     * Puede apuntar a un producto soft-deleted ({@code deleted=true}).
+     * {@link NotFoundAction#IGNORE} evita FetchNotFoundException al cargar
+     * historial de pedidos cuando el platillo ya no está en el catálogo activo.
+     */
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @NotFound(action = NotFoundAction.IGNORE)
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
@@ -34,4 +42,14 @@ public class OrderDetail {
 
     @Column(length = 255)
     private String notes;
+
+    /** Ronda: 1 = pedido inicial, 2+ = adiciones. */
+    @Builder.Default
+    @Column(name = "batch_number", nullable = false)
+    private int batchNumber = 1;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OrderItemStatus status = OrderItemStatus.PENDING;
 }
