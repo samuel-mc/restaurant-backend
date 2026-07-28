@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
@@ -17,12 +18,36 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    // Secreta por defecto de 256 bits codificada en hexadecimal
-    @Value("${application.security.jwt.secret-key:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}")
+    /** Secreto Base64 (mín. 32 bytes decodificados). Sin default inseguro. */
+    @Value("${application.security.jwt.secret-key}")
     private String secretKey;
 
     @Value("${application.security.jwt.expiration:86400000}") // 1 día en milisegundos
     private long jwtExpiration;
+
+    @PostConstruct
+    void validateSecretKey() {
+        if (secretKey == null || secretKey.isBlank()) {
+            throw new IllegalStateException(
+                    "Falta application.security.jwt.secret-key / JWT_SECRET. "
+                            + "Define un secreto Base64 de al menos 32 bytes."
+            );
+        }
+        byte[] keyBytes;
+        try {
+            keyBytes = Decoders.BASE64.decode(secretKey.trim());
+        } catch (RuntimeException e) {
+            throw new IllegalStateException(
+                    "JWT_SECRET debe ser Base64 válido (p. ej. openssl rand -base64 48).",
+                    e
+            );
+        }
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT_SECRET es demasiado corto: se requieren al menos 32 bytes decodificados."
+            );
+        }
+    }
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -69,6 +94,15 @@ public class JwtService {
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+    }
+
+    /** Valida firma y expiración sin cargar UserDetails (p. ej. WebSocket CONNECT). */
+    public boolean isTokenSignatureValid(String token) {
+        try {
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public Long extractRestaurantId(String token) {

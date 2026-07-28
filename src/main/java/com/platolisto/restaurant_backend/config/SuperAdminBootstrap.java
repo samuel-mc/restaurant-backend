@@ -13,12 +13,15 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Crea el SUPER_ADMIN inicial si no existe (solo entornos locales / bootstrap).
+ * Crea el SUPER_ADMIN inicial si no existe.
+ * Desactivado por defecto; solo el perfil local lo habilita.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class SuperAdminBootstrap implements ApplicationRunner {
+
+    private static final String KNOWN_INSECURE_PASSWORD = "SuperAdmin123!";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -26,10 +29,10 @@ public class SuperAdminBootstrap implements ApplicationRunner {
     @Value("${application.superadmin.email:superadmin@platolisto.com}")
     private String email;
 
-    @Value("${application.superadmin.password:SuperAdmin123!}")
+    @Value("${application.superadmin.password:}")
     private String password;
 
-    @Value("${application.superadmin.bootstrap:true}")
+    @Value("${application.superadmin.bootstrap:false}")
     private boolean bootstrap;
 
     @Override
@@ -37,6 +40,18 @@ public class SuperAdminBootstrap implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         if (!bootstrap) {
             return;
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalStateException(
+                    "application.superadmin.bootstrap=true requiere "
+                            + "SUPERADMIN_BOOTSTRAP_PASSWORD / application.superadmin.password."
+            );
+        }
+        if (KNOWN_INSECURE_PASSWORD.equals(password)) {
+            throw new IllegalStateException(
+                    "La contraseña de bootstrap SuperAdmin es insegura y está bloqueada. "
+                            + "Define SUPERADMIN_BOOTSTRAP_PASSWORD con un valor único."
+            );
         }
         if (userRepository.existsByEmailIgnoreCaseAndRole(email, UserRole.SUPER_ADMIN)) {
             return;
@@ -52,7 +67,7 @@ public class SuperAdminBootstrap implements ApplicationRunner {
                 .build());
 
         log.warn(
-                "SUPER_ADMIN creado: {} (cambia la contraseña en producción).",
+                "SUPER_ADMIN creado: {} (cámbialo o desactiva bootstrap fuera de local).",
                 email
         );
     }

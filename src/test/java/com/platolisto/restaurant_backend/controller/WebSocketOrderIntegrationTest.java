@@ -12,6 +12,7 @@ import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.repository.CategoryRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+import com.platolisto.restaurant_backend.security.JwtService;
 import com.platolisto.restaurant_backend.service.OrderService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,11 +25,14 @@ import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -54,6 +58,9 @@ class WebSocketOrderIntegrationTest {
     private ProductRepository productRepository;
 
     @Autowired
+    private JwtService jwtService;
+
+    @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     private Restaurant restaurant1;
@@ -67,7 +74,6 @@ class WebSocketOrderIntegrationTest {
     void setUp() {
         cleanup();
 
-        // 1. Crear Restaurantes (Tenants)
         restaurant1 = restaurantRepository.save(Restaurant.builder()
                 .name("Pizza Hut")
                 .subdomain("pizzahut")
@@ -80,7 +86,6 @@ class WebSocketOrderIntegrationTest {
                 .isActive(true)
                 .build());
 
-        // 2. Crear Categorías
         Category cat1 = categoryRepository.save(Category.builder()
                 .restaurant(restaurant1)
                 .name("Pizzas")
@@ -93,7 +98,6 @@ class WebSocketOrderIntegrationTest {
                 .displayOrder(1)
                 .build());
 
-        // 3. Crear Productos
         productRestaurant1 = productRepository.save(Product.builder()
                 .restaurant(restaurant1)
                 .category(cat1)
@@ -110,10 +114,9 @@ class WebSocketOrderIntegrationTest {
                 .isAvailable(true)
                 .build());
 
-        // Configurar cliente STOMP con ObjectMapper que soporte Java 8 Date/Time
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
-        
+
         MappingJackson2MessageConverter converter = new MappingJackson2MessageConverter();
         converter.setObjectMapper(mapper);
 
@@ -136,25 +139,47 @@ class WebSocketOrderIntegrationTest {
 
     @Test
     void shouldReceiveOrderCreatedInRealTimeAndIsolateBetweenTenants() throws Exception {
-        // --- PARTE 1: Suscribir al Restaurante 1 ---
         CompletableFuture<OrderResponse> completableFutureRestaurant1 = new CompletableFuture<>();
 
+        String token = jwtService.generateToken(
+                User.builder()
+                        .username("kitchen@pizzahut.test")
+                        .password("n/a")
+                        .authorities(Collections.emptyList())
+                        .build(),
+                restaurant1.getId(),
+                "COCINA"
+        );
+
         String wsUrl = "ws://localhost:" + port + "/ws-orders";
-        StompSession session = stompClient.connectAsync(wsUrl, new StompSessionHandlerAdapter() {
-            @Override
-            public void handleException(StompSession session, org.springframework.messaging.simp.stomp.StompCommand command, StompHeaders headers, byte[] payload, Throwable exception) {
-                System.err.println("STOMP Session Exception: " + exception.getMessage());
-                exception.printStackTrace();
-            }
+        StompHeaders connectHeaders = new StompHeaders();
+        connectHeaders.add("Authorization", "Bearer " + token);
 
-            @Override
-            public void handleTransportError(StompSession session, Throwable exception) {
-                System.err.println("STOMP Transport Error: " + exception.getMessage());
-                exception.printStackTrace();
-            }
-        }).get(5, TimeUnit.SECONDS);
+        StompSession session = stompClient.connectAsync(
+                wsUrl,
+                new WebSocketHttpHeaders(),
+                connectHeaders,
+                new StompSessionHandlerAdapter() {
+                    @Override
+                    public void handleException(
+                            StompSession session,
+                            org.springframework.messaging.simp.stomp.StompCommand command,
+                            StompHeaders headers,
+                            byte[] payload,
+                            Throwable exception
+                    ) {
+                        System.err.println("STOMP Session Exception: " + exception.getMessage());
+                        exception.printStackTrace();
+                    }
 
-        // Suscribirse al canal exclusivo del restaurante 1
+                    @Override
+                    public void handleTransportError(StompSession session, Throwable exception) {
+                        System.err.println("STOMP Transport Error: " + exception.getMessage());
+                        exception.printStackTrace();
+                    }
+                }
+        ).get(5, TimeUnit.SECONDS);
+
         String topicRestaurant1 = "/topic/restaurants/" + restaurant1.getId() + "/orders";
         session.subscribe(topicRestaurant1, new StompFrameHandler() {
             @Override
@@ -168,7 +193,6 @@ class WebSocketOrderIntegrationTest {
             }
         });
 
-        // --- PARTE 2: Crear una orden para el Restaurante 2 y verificar que el Restaurante 1 NO reciba nada ---
         OrderDetailRequest itemRestaurant2 = new OrderDetailRequest(productRestaurant2.getUuid(), 1, null);
         OrderRequest orderRequest2 = OrderRequest.builder()
                 .customerName("Juan en BurgerKing")
@@ -176,12 +200,10 @@ class WebSocketOrderIntegrationTest {
                 .details(List.of(itemRestaurant2))
                 .build();
 
-        // Configurar tenant context en el hilo del test para la llamada directa al servicio
         TenantContext.setCurrentTenant(restaurant2.getId());
         orderService.createOrder(orderRequest2);
         TenantContext.clear();
 
-        // Verificar que el restaurante 1 no recibió nada (completableFutureRestaurant1 sigue vacío)
         OrderResponse unexpected = null;
         try {
             unexpected = completableFutureRestaurant1.get(2, TimeUnit.SECONDS);
@@ -190,7 +212,6 @@ class WebSocketOrderIntegrationTest {
         }
         assertThat(unexpected).isNull();
 
-        // --- PARTE 3: Crear una orden para el Restaurante 1 y verificar que sí la recibe ---
         OrderDetailRequest itemRestaurant1 = new OrderDetailRequest(productRestaurant1.getUuid(), 1, null);
         OrderRequest orderRequest1 = OrderRequest.builder()
                 .customerName("Carlos en PizzaHut")
@@ -199,12 +220,10 @@ class WebSocketOrderIntegrationTest {
                 .details(List.of(itemRestaurant1))
                 .build();
 
-        // Configurar tenant context para el restaurante 1
         TenantContext.setCurrentTenant(restaurant1.getId());
         orderService.createOrder(orderRequest1);
         TenantContext.clear();
 
-        // Verificar recepción en tiempo real
         OrderResponse receivedNotification = completableFutureRestaurant1.get(5, TimeUnit.SECONDS);
         assertThat(receivedNotification).isNotNull();
         assertThat(receivedNotification.getCustomerName()).isEqualTo("Carlos en PizzaHut");

@@ -1,31 +1,45 @@
 package com.platolisto.restaurant_backend.config;
 
+import com.platolisto.restaurant_backend.security.WebSocketAuthChannelInterceptor;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+import java.util.List;
+
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private final WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor;
+
+    @Value("${application.security.cors.allowed-origins}")
+    private List<String> allowedOrigins;
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Registrar el endpoint para la conexión del cliente (Soporte directo para WebSockets estándar y SockJS)
+        String[] origins = allowedOrigins.toArray(String[]::new);
         registry.addEndpoint("/ws-orders")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns(origins);
         registry.addEndpoint("/ws-orders")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOriginPatterns(origins)
                 .withSockJS();
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // Habilitar un Message Broker simple para enviar notificaciones al cliente en canales con el prefijo /topic
         registry.enableSimpleBroker("/topic");
-        
-        // Prefijo para los mensajes que se dirigen a los controladores anotados con @MessageMapping
         registry.setApplicationDestinationPrefixes("/app");
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(webSocketAuthChannelInterceptor);
     }
 }

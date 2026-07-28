@@ -48,8 +48,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/menu/**").permitAll()
                 .requestMatchers("/api/v1/orders/**").permitAll()
                 .requestMatchers("/api/v1/restaurants/profile").permitAll()
+                // Handshake WS público; auth real en STOMP CONNECT/SUBSCRIBE
                 .requestMatchers("/ws-orders", "/ws-orders/**").permitAll()
-                .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 // Imágenes de productos (local hoy; R2 CDN mañana)
                 .requestMatchers("/media/**").permitAll()

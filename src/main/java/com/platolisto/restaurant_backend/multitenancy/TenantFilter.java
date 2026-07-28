@@ -83,7 +83,7 @@ public class TenantFilter extends OncePerRequestFilter {
             log.warn("Error resolviendo tenant: {}", e.getMessage());
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"" + e.getMessage() + "\"}");
+            response.getWriter().write("{\"error\":\"TENANT_NOT_FOUND\"}");
         } finally {
             // Limpieza obligatoria del ThreadLocal al finalizar el request
             TenantContext.clear();

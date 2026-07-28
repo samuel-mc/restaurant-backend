@@ -20,7 +20,7 @@ class JwtServiceTest {
     void setUp() {
         jwtService = new JwtService();
         // Inyectamos valores que normalmente resuelve Spring mediante @Value
-        ReflectionTestUtils.setField(jwtService, "secretKey", "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970");
+        ReflectionTestUtils.setField(jwtService, "secretKey", "AURb/z6vKSd0kHvQY/EnUgUEOaU1oZW5CiuuroWPdDwKyBBYWF4H2OkYR0hYXUhp");
         ReflectionTestUtils.setField(jwtService, "jwtExpiration", 86400000L); // 1 día
 
         userDetails = new User("admin@platolisto.com", "password", Collections.emptyList());
