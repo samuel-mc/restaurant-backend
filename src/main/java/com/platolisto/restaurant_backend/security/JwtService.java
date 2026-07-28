@@ -37,9 +37,23 @@ public class JwtService {
         Map<String, Object> extraClaims = new HashMap<>();
         if (restaurantId != null) {
             extraClaims.put("restaurantId", restaurantId);
+            extraClaims.put("tenantId", restaurantId);
         }
         extraClaims.put("role", role);
         return generateToken(extraClaims, userDetails);
+    }
+
+    /**
+     * JWT de miembro del equipo (PIN): incluye {@code staffId}, {@code tenantId} y {@code role}.
+     */
+    public String generateStaffToken(StaffUserDetails staffDetails) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("restaurantId", staffDetails.getRestaurantId());
+        extraClaims.put("tenantId", staffDetails.getRestaurantId());
+        extraClaims.put("staffId", staffDetails.getStaffId().toString());
+        extraClaims.put("role", staffDetails.getRole().name());
+        extraClaims.put("tokenType", "staff");
+        return generateToken(extraClaims, staffDetails);
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
@@ -60,15 +74,32 @@ public class JwtService {
     public Long extractRestaurantId(String token) {
         // En JWT, los números en JSON a menudo se extraen como Integer o Long.
         // Convertir de forma segura para evitar ClassCastException.
-        Object restaurantId = extractAllClaims(token).get("restaurantId");
+        Claims claims = extractAllClaims(token);
+        Object restaurantId = claims.get("restaurantId");
         if (restaurantId instanceof Number) {
             return ((Number) restaurantId).longValue();
+        }
+        Object tenantId = claims.get("tenantId");
+        if (tenantId instanceof Number) {
+            return ((Number) tenantId).longValue();
         }
         return null;
     }
 
+    public String extractStaffId(String token) {
+        return extractClaim(token, claims -> claims.get("staffId", String.class));
+    }
+
     public String extractRole(String token) {
         return extractClaim(token, claims -> claims.get("role", String.class));
+    }
+
+    public boolean isStaffToken(String token) {
+        String tokenType = extractClaim(token, claims -> claims.get("tokenType", String.class));
+        if ("staff".equals(tokenType)) {
+            return true;
+        }
+        return StaffUserDetails.isStaffSubject(extractUsername(token));
     }
 
     private boolean isTokenExpired(String token) {

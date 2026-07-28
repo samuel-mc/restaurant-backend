@@ -1,6 +1,8 @@
 package com.platolisto.restaurant_backend.security;
 
+import com.platolisto.restaurant_backend.entity.StaffMember;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.repository.StaffMemberRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -25,6 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final StaffMemberRepository staffMemberRepository;
 
     @Override
     protected void doFilterInternal(
@@ -32,42 +36,51 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        
+
         final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-        final String userEmail;
 
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        jwt = authHeader.substring(7);
+        final String jwt = authHeader.substring(7);
+        final String subject;
         try {
-            userEmail = jwtService.extractUsername(jwt);
+            subject = jwtService.extractUsername(jwt);
         } catch (Exception e) {
             log.warn("No se pudo extraer el subject/username del token JWT: {}", e.getMessage());
             filterChain.doFilter(request, response);
             return;
         }
 
-        if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
+        if (subject != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails;
+            try {
+                if (jwtService.isStaffToken(jwt) || StaffUserDetails.isStaffSubject(subject)) {
+                    userDetails = loadStaffDetails(jwt, subject);
+                } else {
+                    userDetails = this.userDetailsService.loadUserByUsername(subject);
+                }
+            } catch (Exception e) {
+                log.warn("No se pudo cargar el principal del JWT: {}", e.getMessage());
+                filterChain.doFilter(request, response);
+                return;
+            }
 
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                // ------------------------------------------------------------------
-                // Control de Seguridad Multi-tenant (Prevención de Cross-tenant)
-                // ------------------------------------------------------------------
+            if (userDetails != null && jwtService.isTokenValid(jwt, userDetails) && userDetails.isEnabled()) {
                 Long activeTenantId = TenantContext.getCurrentTenant();
                 Long tokenTenantId = jwtService.extractRestaurantId(jwt);
                 String role = jwtService.extractRole(jwt);
 
-                // Si hay un tenant en curso, validamos que coincida con el del token,
-                // a menos que sea un rol administrativo global (e.g. SUPER_ADMIN)
                 if (activeTenantId != null && !"SUPER_ADMIN".equals(role)) {
                     if (tokenTenantId == null || !tokenTenantId.equals(activeTenantId)) {
-                        log.warn("Intento de acceso cruzado denegado: Token pertenece al restaurant_id {} pero la petición es para el restaurant_id {}. Usuario: {}", 
-                                tokenTenantId, activeTenantId, userEmail);
+                        log.warn(
+                                "Intento de acceso cruzado denegado: Token pertenece al restaurant_id {} pero la petición es para el restaurant_id {}. Subject: {}",
+                                tokenTenantId,
+                                activeTenantId,
+                                subject
+                        );
                         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                         response.setContentType("application/json");
                         response.getWriter().write("{\"error\": \"Acceso no autorizado a este restaurante.\"}");
@@ -80,12 +93,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         null,
                         userDetails.getAuthorities()
                 );
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }
         filterChain.doFilter(request, response);
+    }
+
+    private UserDetails loadStaffDetails(String jwt, String subject) {
+        UUID staffId = StaffUserDetails.parseStaffId(subject);
+        if (staffId == null) {
+            String claimId = jwtService.extractStaffId(jwt);
+            if (claimId != null) {
+                staffId = UUID.fromString(claimId);
+            }
+        }
+        if (staffId == null) {
+            throw new IllegalArgumentException("Token de staff sin staffId");
+        }
+
+        Long restaurantId = jwtService.extractRestaurantId(jwt);
+        if (restaurantId == null) {
+            throw new IllegalArgumentException("Token de staff sin restaurantId");
+        }
+
+        StaffMember member = staffMemberRepository.findByIdAndRestaurantId(staffId, restaurantId)
+                .orElseThrow(() -> new IllegalArgumentException("Staff no encontrado"));
+
+        // No tocar la asociación lazy restaurant: el filtro corre fuera de OSIV.
+        return StaffUserDetails.fromMember(member, restaurantId);
     }
 }
