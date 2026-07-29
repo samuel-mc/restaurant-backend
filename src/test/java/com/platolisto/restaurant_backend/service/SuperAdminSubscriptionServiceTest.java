@@ -1,5 +1,6 @@
 package com.platolisto.restaurant_backend.service;
 
+import com.platolisto.restaurant_backend.billing.EstimatedMrrCalculator;
 import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminTenantSubscriptionRequest;
 import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Restaurant;
@@ -37,6 +38,8 @@ class SuperAdminSubscriptionServiceTest {
     private UserDetailsService userDetailsService;
     @Mock
     private AuthenticationManager authenticationManager;
+    @Mock
+    private EstimatedMrrCalculator estimatedMrrCalculator;
 
     @InjectMocks
     private SuperAdminService superAdminService;

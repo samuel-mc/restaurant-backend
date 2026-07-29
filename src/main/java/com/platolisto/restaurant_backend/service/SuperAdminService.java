@@ -1,5 +1,6 @@
 package com.platolisto.restaurant_backend.service;
 
+import com.platolisto.restaurant_backend.billing.EstimatedMrrCalculator;
 import com.platolisto.restaurant_backend.dto.LoginRequest;
 import com.platolisto.restaurant_backend.dto.LoginResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.ImpersonateResponse;
@@ -40,13 +41,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SuperAdminService {
 
-    private static final long PRO_MONTHLY_MXN = 999L;
-
     private final RestaurantRepository restaurantRepository;
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
     private final AuthenticationManager authenticationManager;
+    private final EstimatedMrrCalculator estimatedMrrCalculator;
 
     public LoginResponse login(LoginRequest request) {
         String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
@@ -213,10 +213,7 @@ public class SuperAdminService {
                 .filter(r -> r.getPlan() == SubscriptionPlan.PRO)
                 .count();
         long basic = total - pro;
-        long mrr = all.stream()
-                .filter(Restaurant::isActive)
-                .filter(r -> r.getPlan() == SubscriptionPlan.PRO)
-                .count() * PRO_MONTHLY_MXN;
+        EstimatedMrrCalculator.EstimatedMrr mrr = estimatedMrrCalculator.estimate(all);
         double churn = total == 0 ? 0.0 : (suspended * 100.0) / total;
 
         return SuperAdminMetricsResponse.builder()
@@ -225,7 +222,15 @@ public class SuperAdminService {
                 .suspendedTenants(suspended)
                 .proTenants(pro)
                 .basicTenants(basic)
-                .estimatedMrr(mrr)
+                .estimatedMrr(mrr.amount())
+                .estimatedMrrCurrency(mrr.currency())
+                .estimatedMrrAsOf(mrr.asOf())
+                .estimatedMrrPeriod(mrr.period())
+                .estimatedMrrMethod(mrr.method())
+                .estimatedMrrLabelEs(mrr.labelEs())
+                .estimatedMrrDisclaimerEs(mrr.disclaimerEs())
+                .estimatedMrrUnitPriceMxn(mrr.unitPriceMxn())
+                .estimatedMrrProActiveCount(mrr.proActiveCount())
                 .churnRate(Math.round(churn * 10.0) / 10.0)
                 .registrationGrowth(buildRegistrationGrowth(all))
                 .build();

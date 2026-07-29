@@ -60,6 +60,14 @@ public class SuperAdminController {
         }
     }
 
+    /**
+     * Métricas del panel SuperAdmin.
+     * <p>
+     * {@code estimatedMrr}: pesos MXN enteros. Método {@code pro_active_list_price}:
+     * tenants {@code isActive && plan == PRO} × {@code application.billing.pro-list-price-mxn}.
+     * Incluye Pro con {@code PENDING_PAYMENT}. Periodo {@code calendar_month}.
+     * No es facturación cerrada; ver metadatos {@code estimatedMrr*} en la respuesta.
+     */
     @GetMapping("/metrics")
     public ResponseEntity<SuperAdminMetricsResponse> metrics() {
         return ResponseEntity.ok(superAdminService.metrics());
