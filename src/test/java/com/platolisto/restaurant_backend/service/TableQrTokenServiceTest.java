@@ -1,14 +1,16 @@
-package com.platolisto.restaurant_backend.security;
+package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.entity.Restaurant;
-import com.platolisto.restaurant_backend.service.TableQrTokenService;
+import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -23,8 +25,12 @@ class TableQrTokenServiceTest {
     @Mock
     private RestaurantRepository restaurantRepository;
 
-    @InjectMocks
     private TableQrTokenService tableQrTokenService;
+
+    @BeforeEach
+    void setUp() {
+        tableQrTokenService = new TableQrTokenService(restaurantRepository, 180, true);
+    }
 
     @Test
     void signAndVerifyRoundTrip() {
@@ -32,6 +38,7 @@ class TableQrTokenServiceTest {
         when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
 
         String token = tableQrTokenService.sign(restaurant, "4");
+        assertTrue(token.contains("."));
         assertTrue(tableQrTokenService.verify(restaurant, "4", token));
         assertFalse(tableQrTokenService.verify(restaurant, "5", token));
         assertFalse(tableQrTokenService.verify(restaurant, "4", "deadbeef"));
@@ -49,5 +56,27 @@ class TableQrTokenServiceTest {
         ArgumentCaptor<Restaurant> captor = ArgumentCaptor.forClass(Restaurant.class);
         verify(restaurantRepository).save(captor.capture());
         assertTrue(captor.getValue().getTableQrSecret() != null);
+    }
+
+    @Test
+    void rejectsExpiredToken() {
+        Restaurant restaurant = Restaurant.builder().id(1L).name("Test").subdomain("test").build();
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        Instant ancient = Instant.now().minus(200, ChronoUnit.DAYS);
+        String token = tableQrTokenService.sign(restaurant, "4", ancient);
+        assertFalse(tableQrTokenService.verify(restaurant, "4", token));
+    }
+
+    @Test
+    void acceptsLegacyWhenEnabledAndRejectsWhenDisabled() {
+        Restaurant restaurant = Restaurant.builder().id(1L).name("Test").subdomain("test").build();
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        String legacy = tableQrTokenService.signLegacyV1ForTests(restaurant, "4");
+        assertTrue(tableQrTokenService.verify(restaurant, "4", legacy));
+
+        TableQrTokenService strict = new TableQrTokenService(restaurantRepository, 180, false);
+        assertFalse(strict.verify(restaurant, "4", legacy));
     }
 }

@@ -21,5 +21,7 @@ public class TableQrSignResponse {
     public static class TableQrLink {
         private String tableNumber;
         private String tableToken;
+        /** Caducidad del token (ISO-8601 UTC). */
+        private String expiresAt;
     }
 }

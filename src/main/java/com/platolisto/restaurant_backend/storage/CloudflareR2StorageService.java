@@ -102,6 +102,8 @@ public class CloudflareR2StorageService implements ObjectStorageService {
                     "No se pudo subir la imagen a Cloudflare R2.",
                     ex
             );
+        } catch (IOException ex) {
+            throw new StorageException("No se pudo leer el archivo de imagen.", ex);
         }
 
         String url = joinPublicUrl(publicUrl, objectKey);

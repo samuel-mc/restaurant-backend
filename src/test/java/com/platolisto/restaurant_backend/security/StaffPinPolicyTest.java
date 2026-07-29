@@ -15,6 +15,8 @@ class StaffPinPolicyTest {
         assertTrue(StaffPinPolicy.isWeak("123456"));
         assertTrue(StaffPinPolicy.isWeak("654321"));
         assertTrue(StaffPinPolicy.isWeak("121212"));
+        assertTrue(StaffPinPolicy.isWeak("112233"));
+        assertTrue(StaffPinPolicy.isWeak("112211"));
     }
 
     @Test

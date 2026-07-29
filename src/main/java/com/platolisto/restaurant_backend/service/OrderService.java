@@ -20,6 +20,7 @@ import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.OrderRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+import com.platolisto.restaurant_backend.security.OrderStatusAuthorization;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -325,6 +326,8 @@ public class OrderService {
             throw new IllegalArgumentException("No se puede cerrar un pedido cancelado.");
         }
 
+        OrderStatusAuthorization.assertCanCloseOrder();
+
         order.setStatus(OrderStatus.CLOSED);
         for (OrderDetail detail : order.getDetails()) {
             if (detail.getStatus() != OrderItemStatus.DELIVERED) {
@@ -513,6 +516,8 @@ public class OrderService {
         if (!order.getRestaurant().getId().equals(restaurantId)) {
             throw new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid);
         }
+
+        OrderStatusAuthorization.assertCanUpdateStatus(order.getStatus(), status);
 
         order.setStatus(status);
 

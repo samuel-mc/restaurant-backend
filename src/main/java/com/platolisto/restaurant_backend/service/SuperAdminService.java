@@ -15,6 +15,7 @@ import com.platolisto.restaurant_backend.entity.UserRole;
 import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.repository.UserRepository;
+import com.platolisto.restaurant_backend.security.ImpersonationHandoffService;
 import com.platolisto.restaurant_backend.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +45,7 @@ public class SuperAdminService {
     private final RestaurantRepository restaurantRepository;
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final ImpersonationHandoffService impersonationHandoffService;
     private final UserDetailsService userDetailsService;
     private final AuthenticationManager authenticationManager;
     private final EstimatedMrrCalculator estimatedMrrCalculator;
@@ -179,24 +181,32 @@ public class SuperAdminService {
                 owner.getRole().name(),
                 actor
         );
+        String code = impersonationHandoffService.issue(
+                token,
+                restaurant.getSubdomain(),
+                restaurant.getId()
+        );
         long expiresInSeconds = Math.max(1L, jwtService.getImpersonationExpirationMs() / 1000L);
+        long handoffExpiresInSeconds = impersonationHandoffService.ttlSeconds();
 
         // Auditoría: quién entró a qué tenant como quién (buscar en logs por "Impersonación").
         log.warn(
-                "Impersonación: actor={} restaurantId={} subdomain={} asUser={} role={} expiresInSeconds={}",
+                "Impersonación: actor={} restaurantId={} subdomain={} asUser={} role={} expiresInSeconds={} handoffTtlSeconds={}",
                 actor,
                 restaurant.getId(),
                 restaurant.getSubdomain(),
                 owner.getEmail(),
                 owner.getRole().name(),
-                expiresInSeconds
+                expiresInSeconds,
+                handoffExpiresInSeconds
         );
 
         return ImpersonateResponse.builder()
-                .token(token)
+                .code(code)
                 .tenantSlug(restaurant.getSubdomain())
                 .restaurantName(restaurant.getName())
                 .loginPath("/admin/dashboard")
+                .handoffExpiresInSeconds(handoffExpiresInSeconds)
                 .expiresInSeconds(expiresInSeconds)
                 .impersonatedBy(actor)
                 .impersonatedAs(owner.getEmail())

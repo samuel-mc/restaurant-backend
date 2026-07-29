@@ -41,6 +41,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Rutas públicas de Autenticación y Menú del Comensal
                 .requestMatchers("/api/v1/auth/login").permitAll()
+                .requestMatchers("/api/v1/auth/impersonation/redeem").permitAll()
                 .requestMatchers("/api/v1/staff/login-pin").permitAll()
                 .requestMatchers("/api/v1/public/staff", "/api/v1/public/staff/**").permitAll()
                 .requestMatchers("/api/v1/superadmin/auth/login").permitAll()

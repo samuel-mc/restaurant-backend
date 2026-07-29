@@ -35,7 +35,7 @@ public class OrderRequest {
      * Token del QR de mesa ({@code ?t=}). Obligatorio para pedidos IN_TABLE
      * (abrir cuenta y añadir rondas). El UUID de tracking no autoriza mutaciones.
      */
-    @Size(max = 64, message = "Token de mesa inválido")
+    @Size(max = 80, message = "Token de mesa inválido")
     private String tableToken;
 
     private String deliveryAddress;

@@ -55,9 +55,12 @@ public class AdminTableQrController {
 
         List<TableQrSignResponse.TableQrLink> links = new ArrayList<>();
         for (String table : unique) {
+            TableQrTokenService.SignedTableToken signed =
+                    tableQrTokenService.signWithExpiry(restaurant, table);
             links.add(TableQrSignResponse.TableQrLink.builder()
                     .tableNumber(table)
-                    .tableToken(tableQrTokenService.sign(restaurant, table))
+                    .tableToken(signed.token())
+                    .expiresAt(signed.expiresAt().toString())
                     .build());
         }
         return ResponseEntity.ok(TableQrSignResponse.builder().links(links).build());
