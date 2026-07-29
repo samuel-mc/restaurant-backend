@@ -79,6 +79,7 @@ public class OrderService {
         }
 
         validateOrderTypeAllowed(restaurant, request.getOrderType());
+        validateDeliveryContact(request);
 
         Order openOrder = findOpenOrderForAddition(request, restaurantId);
         if (openOrder != null) {
@@ -431,6 +432,23 @@ public class OrderService {
                     );
                 }
             }
+        }
+    }
+
+    /** A domicilio exige nombre, teléfono y dirección (además del @NotBlank de customerName). */
+    private static void validateDeliveryContact(OrderRequest request) {
+        if (request.getOrderType() != OrderType.DELIVERY) {
+            return;
+        }
+        if (request.getCustomerPhone() == null || request.getCustomerPhone().isBlank()) {
+            throw new IllegalArgumentException(
+                    "El teléfono es requerido para pedidos a domicilio."
+            );
+        }
+        if (request.getDeliveryAddress() == null || request.getDeliveryAddress().isBlank()) {
+            throw new IllegalArgumentException(
+                    "La dirección de entrega es requerida para pedidos a domicilio."
+            );
         }
     }
 
