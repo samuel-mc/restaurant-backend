@@ -19,4 +19,15 @@ class PlanLimitsTest {
         assertThat(PlanLimits.canUseProServiceModules(
                 SubscriptionPlan.BASIC, PaymentStatus.PENDING_PAYMENT)).isFalse();
     }
+
+    @Test
+    void basicProductLimitMessages() {
+        assertThat(PlanLimits.canCreateProduct(SubscriptionPlan.BASIC, 29)).isTrue();
+        assertThat(PlanLimits.canCreateProduct(SubscriptionPlan.BASIC, 30)).isFalse();
+        assertThat(PlanLimits.canCreateProduct(SubscriptionPlan.PRO, 100)).isTrue();
+        assertThat(PlanLimits.basicImportWouldExceedMessage(25, 10))
+                .contains("25")
+                .contains("10")
+                .contains("Plan Pro");
+    }
 }

@@ -160,16 +160,27 @@ public class MenuImportService {
             );
         }
 
+        long activeCount = productRepository.countByRestaurant_Id(restaurantId);
+        SubscriptionPlan plan = restaurant.getPlan() != null
+                ? restaurant.getPlan()
+                : SubscriptionPlan.BASIC;
+
+        if (plan != SubscriptionPlan.PRO) {
+            if (!PlanLimits.canCreateProduct(plan, activeCount)) {
+                throw new IllegalArgumentException(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE);
+            }
+            if (activeCount + rows.size() > PlanLimits.BASIC_MAX_PRODUCTS) {
+                throw new IllegalArgumentException(
+                        PlanLimits.basicImportWouldExceedMessage(activeCount, rows.size())
+                );
+            }
+        }
+
         Map<String, Category> categoriesByKey = loadCategoryCache();
         int nextDisplayOrder = categoriesByKey.values().stream()
                 .mapToInt(Category::getDisplayOrder)
                 .max()
                 .orElse(-1) + 1;
-
-        long activeCount = productRepository.countByRestaurant_Id(restaurantId);
-        SubscriptionPlan plan = restaurant.getPlan() != null
-                ? restaurant.getPlan()
-                : SubscriptionPlan.BASIC;
 
         List<MenuImportRowError> errors = new ArrayList<>();
         List<ProductResponse> createdProducts = new ArrayList<>();
@@ -181,13 +192,8 @@ public class MenuImportService {
             try {
                 ValidatedDish dish = validateRow(row);
                 if (!PlanLimits.canCreateProduct(plan, activeCount + createdProducts.size())) {
-                    errors.add(MenuImportRowError.builder()
-                            .row(row.rowNumber())
-                            .reason("Límite del Plan Básico alcanzado ("
-                                    + PlanLimits.BASIC_MAX_PRODUCTS
-                                    + " platillos). Filas restantes omitidas.")
-                            .build());
-                    break;
+                    // Red de seguridad: no debería ocurrir tras el prechequeo.
+                    throw new IllegalArgumentException(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE);
                 }
 
                 Category category = categoriesByKey.get(dish.categoryKey());

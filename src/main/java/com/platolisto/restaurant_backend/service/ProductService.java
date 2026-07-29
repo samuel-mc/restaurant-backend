@@ -48,10 +48,7 @@ public class ProductService {
                 ? restaurant.getPlan()
                 : SubscriptionPlan.BASIC;
         if (!PlanLimits.canCreateProduct(plan, activeCount)) {
-            throw new IllegalArgumentException(
-                    "El Plan Básico permite hasta " + PlanLimits.BASIC_MAX_PRODUCTS
-                            + " platillos. Actualiza a Pro para menú ilimitado."
-            );
+            throw new IllegalArgumentException(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE);
         }
 
         Category category = categoryRepository.findById(request.getCategoryId())

@@ -10,6 +10,10 @@ public final class PlanLimits {
 
     public static final int BASIC_MAX_PRODUCTS = 30;
 
+    public static final String BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE =
+            "El Plan Básico permite hasta " + BASIC_MAX_PRODUCTS
+                    + " platillos. Actualiza al Plan Pro para menú ilimitado.";
+
     private PlanLimits() {
     }
 
@@ -29,6 +33,13 @@ public final class PlanLimits {
             return true;
         }
         return activeProductCount < BASIC_MAX_PRODUCTS;
+    }
+
+    public static String basicImportWouldExceedMessage(long currentCount, int fileRowCount) {
+        return "El Plan Básico permite hasta " + BASIC_MAX_PRODUCTS
+                + " platillos. Ya tienes " + currentCount
+                + " y el archivo trae " + fileRowCount
+                + ". Actualiza al Plan Pro para menú ilimitado.";
     }
 
     public static boolean isProEntitled(SubscriptionPlan plan, PaymentStatus paymentStatus) {
