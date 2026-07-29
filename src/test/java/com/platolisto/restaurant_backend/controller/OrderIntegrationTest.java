@@ -24,6 +24,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -169,7 +170,10 @@ class OrderIntegrationTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.uuid").exists())
-                .andExpect(jsonPath("$.customerName").value("Juan Perez"))
+                .andExpect(jsonPath("$.customerName").value(nullValue()))
+                .andExpect(jsonPath("$.customerPhone").value(nullValue()))
+                .andExpect(jsonPath("$.details[0].notes").value(nullValue()))
+                .andExpect(jsonPath("$.details[1].notes").value(nullValue()))
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.totalAmount").value(29.48))
                 .andExpect(jsonPath("$.details", hasSize(2)))

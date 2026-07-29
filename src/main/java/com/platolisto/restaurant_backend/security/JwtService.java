@@ -27,7 +27,8 @@ public class JwtService {
     @Value("${application.security.jwt.secret-key}")
     private String secretKey;
 
-    @Value("${application.security.jwt.expiration:86400000}") // 1 día en milisegundos
+    /** Sesión admin/staff: default 8h (alineado con cookie del panel). */
+    @Value("${application.security.jwt.expiration:28800000}")
     private long jwtExpiration;
 
     @Value("${application.security.ws-ticket.expiration-ms:60000}")
@@ -69,10 +70,20 @@ public class JwtService {
                     "application.security.impersonation.expiration-ms debe estar entre 1min y 2h."
             );
         }
+        // Entre 15 min y 24 h: lo bastante corto para revocación práctica, sin forzar re-login constante.
+        if (jwtExpiration < 900_000L || jwtExpiration > 86_400_000L) {
+            throw new IllegalStateException(
+                    "application.security.jwt.expiration debe estar entre 15min y 24h (ms)."
+            );
+        }
     }
 
     public long getWsTicketExpirationMs() {
         return wsTicketExpirationMs;
+    }
+
+    public long getJwtExpirationMs() {
+        return jwtExpiration;
     }
 
     public long getImpersonationExpirationMs() {
@@ -166,11 +177,14 @@ public class JwtService {
     }
 
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>(extraClaims != null ? extraClaims : Map.of());
+        claims.putIfAbsent("jti", UUID.randomUUID().toString());
+        long now = System.currentTimeMillis();
         return Jwts.builder()
-                .claims(extraClaims)
+                .claims(claims)
                 .subject(userDetails.getUsername())
-                .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + jwtExpiration))
                 .signWith(getSignInKey())
                 .compact();
     }
@@ -245,6 +259,11 @@ public class JwtService {
 
     private boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
+    }
+
+    /** Expuesto para denylist / logout (hasta cuándo retener el jti). */
+    public Date extractExpirationPublic(String token) {
+        return extractExpiration(token);
     }
 
     private Date extractExpiration(String token) {

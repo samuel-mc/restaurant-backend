@@ -27,6 +27,7 @@ import java.util.UUID;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final JwtDenylistService jwtDenylistService;
     private final UserDetailsService userDetailsService;
     private final StaffMemberRepository staffMemberRepository;
 
@@ -54,6 +55,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
         } catch (Exception ignored) {
             // Si no se puede parsear, el flujo normal abajo también fallará con suavidad.
+        }
+
+        // Logout / robo de cookie: jti en denylist → no autenticar.
+        try {
+            if (jwtDenylistService.isRevoked(jwt)) {
+                log.info("JWT rechazado: jti en denylist");
+                filterChain.doFilter(request, response);
+                return;
+            }
+        } catch (Exception ignored) {
+            // Continuar; la validación normal decidirá.
         }
 
         final String subject;

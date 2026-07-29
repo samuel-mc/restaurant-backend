@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.config;
 
 import com.platolisto.restaurant_backend.multitenancy.TenantFilter;
+import com.platolisto.restaurant_backend.security.ImpersonationReadOnlyFilter;
 import com.platolisto.restaurant_backend.security.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,7 @@ public class SecurityConfig {
 
     private final TenantFilter tenantFilter;
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final ImpersonationReadOnlyFilter impersonationReadOnlyFilter;
     private final AuthenticationProvider authenticationProvider;
 
     @Value("${application.security.cors.allowed-origins}")
@@ -94,6 +96,7 @@ public class SecurityConfig {
             )
             .authenticationProvider(authenticationProvider)
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(impersonationReadOnlyFilter, JwtAuthenticationFilter.class)
             .addFilterBefore(tenantFilter, JwtAuthenticationFilter.class);
 
         return http.build();

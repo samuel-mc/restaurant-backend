@@ -3,6 +3,7 @@ package com.platolisto.restaurant_backend.controller;
 import com.platolisto.restaurant_backend.dto.LoginRequest;
 import com.platolisto.restaurant_backend.dto.LoginResponse;
 import com.platolisto.restaurant_backend.security.ClientIpResolver;
+import com.platolisto.restaurant_backend.security.JwtDenylistService;
 import com.platolisto.restaurant_backend.security.LoginAttemptService;
 import com.platolisto.restaurant_backend.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +28,7 @@ public class AuthController {
     private final AuthService authService;
     private final LoginAttemptService loginAttemptService;
     private final ClientIpResolver clientIpResolver;
+    private final JwtDenylistService jwtDenylistService;
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
@@ -47,6 +49,19 @@ public class AuthController {
             loginAttemptService.recordFailure(accountKey, ipKey);
             throw ex;
         }
+    }
+
+    /**
+     * Invalida el JWT actual (jti en denylist). Requiere Bearer válido.
+     * Sin Redis: la denylist vive en memoria de esta instancia.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
+        String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwtDenylistService.revoke(authHeader.substring(7).trim());
+        }
+        return ResponseEntity.noContent().build();
     }
 
     private static String accountKey(LoginRequest request) {

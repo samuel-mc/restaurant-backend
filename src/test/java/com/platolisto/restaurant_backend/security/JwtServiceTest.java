@@ -21,7 +21,7 @@ class JwtServiceTest {
         jwtService = new JwtService();
         // Inyectamos valores que normalmente resuelve Spring mediante @Value
         ReflectionTestUtils.setField(jwtService, "secretKey", "AURb/z6vKSd0kHvQY/EnUgUEOaU1oZW5CiuuroWPdDwKyBBYWF4H2OkYR0hYXUhp");
-        ReflectionTestUtils.setField(jwtService, "jwtExpiration", 86400000L); // 1 día
+        ReflectionTestUtils.setField(jwtService, "jwtExpiration", 28_800_000L); // 8 h
         ReflectionTestUtils.setField(jwtService, "wsTicketExpirationMs", 60_000L);
         ReflectionTestUtils.setField(jwtService, "impersonationExpirationMs", 1_800_000L);
 
@@ -38,6 +38,8 @@ class JwtServiceTest {
         assertThat(jwtService.extractUsername(token)).isEqualTo("admin@platolisto.com");
         assertThat(jwtService.extractRestaurantId(token)).isEqualTo(1L);
         assertThat(jwtService.extractRole(token)).isEqualTo("ADMIN");
+        assertThat(jwtService.extractJti(token)).isNotBlank();
+        assertThat(jwtService.getJwtExpirationMs()).isEqualTo(28_800_000L);
     }
 
     @Test

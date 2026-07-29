@@ -39,7 +39,7 @@ public class TableQrTokenService {
     public TableQrTokenService(
             RestaurantRepository restaurantRepository,
             @Value("${application.security.table-qr.ttl-days:180}") long ttlDays,
-            @Value("${application.security.table-qr.allow-legacy-tokens:true}") boolean allowLegacyTokens
+            @Value("${application.security.table-qr.allow-legacy-tokens:false}") boolean allowLegacyTokens
     ) {
         if (ttlDays < MIN_TTL_DAYS || ttlDays > MAX_TTL_DAYS) {
             throw new IllegalArgumentException(

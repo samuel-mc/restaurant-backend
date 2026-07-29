@@ -635,7 +635,7 @@ public class OrderService {
                 .build();
     }
 
-    /** Vista pública: sin teléfono ni dirección (copia; no muta la vista admin/cocina). */
+    /** Vista pública: sin PII ni notas de ítems (copia; no muta la vista admin/cocina). */
     private OrderResponse mapToPublicResponse(Order order) {
         return stripPublicPii(mapToResponse(order));
     }
@@ -644,10 +644,26 @@ public class OrderService {
         if (response == null) {
             return null;
         }
+        List<OrderDetailResponse> publicDetails = response.getDetails() == null
+                ? List.of()
+                : response.getDetails().stream()
+                .map(detail -> OrderDetailResponse.builder()
+                        .id(detail.getId())
+                        .productUuid(detail.getProductUuid())
+                        .productName(detail.getProductName())
+                        .quantity(detail.getQuantity())
+                        .unitPrice(detail.getUnitPrice())
+                        .subtotal(detail.getSubtotal())
+                        .notes(null)
+                        .batchNumber(detail.getBatchNumber())
+                        .status(detail.getStatus())
+                        .build())
+                .collect(Collectors.toList());
+
         return OrderResponse.builder()
                 .id(response.getId())
                 .uuid(response.getUuid())
-                .customerName(response.getCustomerName())
+                .customerName(null)
                 .customerPhone(null)
                 .orderType(response.getOrderType())
                 .tableNumber(response.getTableNumber())
@@ -656,7 +672,7 @@ public class OrderService {
                 .totalAmount(response.getTotalAmount())
                 .createdAt(response.getCreatedAt())
                 .updatedAt(response.getUpdatedAt())
-                .details(response.getDetails())
+                .details(publicDetails)
                 .build();
     }
 }

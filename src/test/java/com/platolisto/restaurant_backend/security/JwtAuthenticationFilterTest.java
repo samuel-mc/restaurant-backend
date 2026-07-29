@@ -31,7 +31,13 @@ class JwtAuthenticationFilterTest {
     private JwtService jwtService;
 
     @Mock
+    private JwtDenylistService jwtDenylistService;
+
+    @Mock
     private UserDetailsService userDetailsService;
+
+    @Mock
+    private com.platolisto.restaurant_backend.repository.StaffMemberRepository staffMemberRepository;
 
     @Mock
     private FilterChain filterChain;
@@ -62,7 +68,10 @@ class JwtAuthenticationFilterTest {
     void shouldAuthenticateValidTokenAndSameTenant() throws ServletException, IOException {
         // Given
         request.addHeader("Authorization", "Bearer valid-token");
+        when(jwtService.isWsTicket("valid-token")).thenReturn(false);
+        when(jwtDenylistService.isRevoked("valid-token")).thenReturn(false);
         when(jwtService.extractUsername("valid-token")).thenReturn("admin@platolisto.com");
+        when(jwtService.isStaffToken("valid-token")).thenReturn(false);
         when(userDetailsService.loadUserByUsername("admin@platolisto.com")).thenReturn(userDetails);
         when(jwtService.isTokenValid("valid-token", userDetails)).thenReturn(true);
         
@@ -84,7 +93,10 @@ class JwtAuthenticationFilterTest {
     void shouldDenyAccessWhenTenantMismatch() throws ServletException, IOException {
         // Given
         request.addHeader("Authorization", "Bearer cross-tenant-token");
+        when(jwtService.isWsTicket("cross-tenant-token")).thenReturn(false);
+        when(jwtDenylistService.isRevoked("cross-tenant-token")).thenReturn(false);
         when(jwtService.extractUsername("cross-tenant-token")).thenReturn("admin@platolisto.com");
+        when(jwtService.isStaffToken("cross-tenant-token")).thenReturn(false);
         when(userDetailsService.loadUserByUsername("admin@platolisto.com")).thenReturn(userDetails);
         when(jwtService.isTokenValid("cross-tenant-token", userDetails)).thenReturn(true);
         
@@ -107,7 +119,10 @@ class JwtAuthenticationFilterTest {
     void shouldAllowAccessForSuperAdminEvenWithTenantMismatch() throws ServletException, IOException {
         // Given
         request.addHeader("Authorization", "Bearer superadmin-token");
+        when(jwtService.isWsTicket("superadmin-token")).thenReturn(false);
+        when(jwtDenylistService.isRevoked("superadmin-token")).thenReturn(false);
         when(jwtService.extractUsername("superadmin-token")).thenReturn("super@platolisto.com");
+        when(jwtService.isStaffToken("superadmin-token")).thenReturn(false);
         when(userDetailsService.loadUserByUsername("super@platolisto.com")).thenReturn(userDetails);
         when(jwtService.isTokenValid("superadmin-token", userDetails)).thenReturn(true);
         
@@ -122,6 +137,19 @@ class JwtAuthenticationFilterTest {
         // Then
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
         verify(filterChain, times(1)).doFilter(request, response);
+    }
+
+    @Test
+    void shouldNotAuthenticateRevokedToken() throws ServletException, IOException {
+        request.addHeader("Authorization", "Bearer revoked-token");
+        when(jwtService.isWsTicket("revoked-token")).thenReturn(false);
+        when(jwtDenylistService.isRevoked("revoked-token")).thenReturn(true);
+
+        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(filterChain, times(1)).doFilter(request, response);
+        verify(userDetailsService, never()).loadUserByUsername(anyString());
     }
 
     @Test
