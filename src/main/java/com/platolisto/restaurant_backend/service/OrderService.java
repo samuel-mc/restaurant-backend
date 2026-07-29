@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -168,6 +169,22 @@ public class OrderService {
             Long restaurantId,
             int batchNumber
     ) {
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+        SubscriptionPlan plan = restaurant.getPlan() != null
+                ? restaurant.getPlan()
+                : SubscriptionPlan.BASIC;
+        Set<UUID> publicProductUuids = null;
+        if (plan != SubscriptionPlan.PRO) {
+            List<Product> visible = PlanLimits.limitPublicCatalog(
+                    plan,
+                    productRepository.findByIsAvailableTrue()
+            );
+            publicProductUuids = visible.stream()
+                    .map(Product::getUuid)
+                    .collect(Collectors.toSet());
+        }
+
         BigDecimal added = BigDecimal.ZERO;
         for (OrderDetailRequest detailRequest : detailRequests) {
             Product product = productRepository.findByUuid(detailRequest.getProductUuid())
@@ -182,6 +199,11 @@ public class OrderService {
                 );
             }
             if (product.isDeleted() || !product.isAvailable()) {
+                throw new IllegalArgumentException(
+                        "El producto " + product.getName() + " no está disponible en este momento."
+                );
+            }
+            if (publicProductUuids != null && !publicProductUuids.contains(product.getUuid())) {
                 throw new IllegalArgumentException(
                         "El producto " + product.getName() + " no está disponible en este momento."
                 );

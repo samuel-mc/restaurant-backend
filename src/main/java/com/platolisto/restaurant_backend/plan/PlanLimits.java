@@ -1,7 +1,12 @@
 package com.platolisto.restaurant_backend.plan;
 
 import com.platolisto.restaurant_backend.entity.PaymentStatus;
+import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Límites y reglas por plan + estado de pago.
@@ -14,7 +19,26 @@ public final class PlanLimits {
             "El Plan Básico permite hasta " + BASIC_MAX_PRODUCTS
                     + " platillos. Actualiza al Plan Pro para menú ilimitado.";
 
+    private static final Comparator<Product> PUBLIC_CATALOG_ORDER =
+            Comparator.comparing((Product p) -> p.getCategory().getDisplayOrder())
+                    .thenComparing(Product::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(Product::getId, Comparator.nullsLast(Comparator.naturalOrder()));
+
     private PlanLimits() {
+    }
+
+    /**
+     * Catálogo público en Básico: como máximo {@link #BASIC_MAX_PRODUCTS} platillos
+     * (orden estable por categoría, fecha de alta e id). Pro no limita.
+     */
+    public static List<Product> limitPublicCatalog(SubscriptionPlan plan, List<Product> availableProducts) {
+        if (plan == SubscriptionPlan.PRO || availableProducts.size() <= BASIC_MAX_PRODUCTS) {
+            return availableProducts;
+        }
+        return availableProducts.stream()
+                .sorted(PUBLIC_CATALOG_ORDER)
+                .limit(BASIC_MAX_PRODUCTS)
+                .collect(Collectors.toList());
     }
 
     /**

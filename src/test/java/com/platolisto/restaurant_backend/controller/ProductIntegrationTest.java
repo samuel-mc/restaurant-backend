@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platolisto.restaurant_backend.dto.ProductRequest;
 import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Category;
+import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.entity.User;
 import com.platolisto.restaurant_backend.entity.UserRole;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.CategoryRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
@@ -286,6 +289,33 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].uuid").value(uuid1.toString()))
                 .andExpect(jsonPath("$[0].name").value("Pollo Disponible"));
+    }
+
+    @Test
+    void shouldCapPublicCatalogAtBasicLimitAfterDowngrade() throws Exception {
+        mockRestaurant.setPlan(SubscriptionPlan.PRO);
+        restaurantRepository.save(mockRestaurant);
+
+        TenantContext.setCurrentTenant(mockRestaurant.getId());
+        int total = PlanLimits.BASIC_MAX_PRODUCTS + 5;
+        for (int i = 0; i < total; i++) {
+            productRepository.save(Product.builder()
+                    .restaurant(mockRestaurant)
+                    .category(mockCategory)
+                    .name("Platillo " + i)
+                    .price(new BigDecimal("1.00"))
+                    .isAvailable(true)
+                    .build());
+        }
+        TenantContext.clear();
+
+        mockRestaurant.setPlan(SubscriptionPlan.BASIC);
+        restaurantRepository.save(mockRestaurant);
+
+        mockMvc.perform(get("/api/v1/menu/catalog")
+                        .header("X-Tenant", "kfc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(PlanLimits.BASIC_MAX_PRODUCTS)));
     }
 
     private String createProductRequest(ProductRequest request) throws Exception {

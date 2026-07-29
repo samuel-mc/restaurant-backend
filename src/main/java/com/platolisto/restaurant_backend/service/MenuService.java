@@ -2,7 +2,12 @@ package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Product;
+import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
+import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
+import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,6 +22,7 @@ import java.util.stream.Collectors;
 public class MenuService {
 
     private final ProductRepository productRepository;
+    private final RestaurantRepository restaurantRepository;
 
     @Transactional(readOnly = true)
     public List<ProductResponse> getPublicCatalog() {
@@ -24,7 +30,20 @@ public class MenuService {
         // Debido a AOP y @SQLRestriction, ya se filtran por restaurant_id y deleted = false automáticamente.
         List<Product> availableProducts = productRepository.findByIsAvailableTrue();
 
-        return availableProducts.stream()
+        Long restaurantId = TenantContext.getCurrentTenant();
+        SubscriptionPlan plan = SubscriptionPlan.BASIC;
+        if (restaurantId != null) {
+            plan = restaurantRepository.findById(restaurantId)
+                    .map(Restaurant::getPlan)
+                    .orElse(SubscriptionPlan.BASIC);
+            if (plan == null) {
+                plan = SubscriptionPlan.BASIC;
+            }
+        }
+
+        List<Product> visible = PlanLimits.limitPublicCatalog(plan, availableProducts);
+
+        return visible.stream()
                 .map(product -> ProductResponse.builder()
                         .uuid(product.getUuid())
                         .name(product.getName())
