@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
@@ -79,7 +80,11 @@ public class SuperAdminController {
     }
 
     @PostMapping("/tenants/{id}/impersonate")
-    public ResponseEntity<ImpersonateResponse> impersonate(@PathVariable Long id) {
-        return ResponseEntity.ok(superAdminService.impersonate(id));
+    public ResponseEntity<ImpersonateResponse> impersonate(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        String actor = authentication != null ? authentication.getName() : null;
+        return ResponseEntity.ok(superAdminService.impersonate(id, actor));
     }
 }

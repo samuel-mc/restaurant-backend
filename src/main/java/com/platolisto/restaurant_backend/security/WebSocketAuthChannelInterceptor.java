@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.security;
 
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
+import com.platolisto.restaurant_backend.service.WsTicketService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
@@ -18,7 +19,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Autentica CONNECT con JWT (opcional) y autoriza SUBSCRIBE a topics de cocina/admin.
+ * Autentica CONNECT con ticket WS de corta vida y autoriza SUBSCRIBE a topics de cocina/admin.
  * El tracking público {@code /topic/order/{uuid}} permanece anónimo.
  */
 @Component
@@ -34,6 +35,7 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
             Pattern.compile("^/topic/order/[0-9a-fA-F-]{36}$");
 
     private final JwtService jwtService;
+    private final WsTicketService wsTicketService;
     private final RestaurantRepository restaurantRepository;
 
     @Override
@@ -60,12 +62,11 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
     private void authenticateConnect(StompHeaderAccessor accessor) {
         String token = extractBearerToken(accessor);
         if (token == null) {
+            // Anónimo: solo tracking público.
             return;
         }
         try {
-            if (!jwtService.isTokenSignatureValid(token)) {
-                throw new IllegalArgumentException("Token JWT inválido o expirado.");
-            }
+            wsTicketService.authenticateAndConsume(token);
             String subject = jwtService.extractUsername(token);
             Long restaurantId = jwtService.extractRestaurantId(token);
             String role = jwtService.extractRole(token);
@@ -73,7 +74,7 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            log.warn("CONNECT WebSocket con JWT inválido: {}", e.getMessage());
+            log.warn("CONNECT WebSocket con ticket inválido: {}", e.getMessage());
             throw new IllegalArgumentException("No autorizado para WebSocket.");
         }
     }
@@ -106,14 +107,6 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
     private void requireKitchenAccess(StompHeaderAccessor accessor, Long requiredRestaurantId) {
         Principal principal = accessor.getUser();
-        if (!(principal instanceof WsAuthenticatedPrincipal)) {
-            // Algunos clientes reenvían Authorization en SUBSCRIBE; intentar de nuevo.
-            String token = extractBearerToken(accessor);
-            if (token != null) {
-                authenticateConnect(accessor);
-                principal = accessor.getUser();
-            }
-        }
         if (!(principal instanceof WsAuthenticatedPrincipal wsUser)) {
             throw new IllegalArgumentException("Se requiere autenticación para este canal.");
         }

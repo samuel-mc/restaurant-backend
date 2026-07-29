@@ -45,6 +45,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         final String jwt = authHeader.substring(7);
+
+        // Los tickets WS no autentican APIs HTTP (aunque alguien los reenvíe).
+        try {
+            if (jwtService.isWsTicket(jwt)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+        } catch (Exception ignored) {
+            // Si no se puede parsear, el flujo normal abajo también fallará con suavidad.
+        }
+
         final String subject;
         try {
             subject = jwtService.extractUsername(jwt);

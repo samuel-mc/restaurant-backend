@@ -66,6 +66,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/admin/orders/**")
                     .hasAnyRole("MESERO", "COCINA", "ADMIN", "OWNER")
 
+                // Ticket STOMP: cualquier rol de piso/cocina autenticado
+                .requestMatchers("/api/v1/admin/ws-ticket")
+                    .hasAnyRole("MESERO", "COCINA", "ADMIN", "OWNER")
+
                 // Equipo, facturación, menú, settings, analytics — solo administración
                 .requestMatchers(
                         "/api/v1/admin/team/**",

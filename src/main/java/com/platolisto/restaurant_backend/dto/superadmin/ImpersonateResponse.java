@@ -12,4 +12,10 @@ public class ImpersonateResponse {
     private String tenantSlug;
     private String restaurantName;
     private String loginPath;
+    /** Segundos hasta que expire el JWT de soporte. */
+    private long expiresInSeconds;
+    /** Email del SuperAdmin que inició la sesión. */
+    private String impersonatedBy;
+    /** Email del OWNER/ADMIN impersonado. */
+    private String impersonatedAs;
 }

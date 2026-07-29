@@ -88,7 +88,12 @@ public class SuperAdminService {
     }
 
     @Transactional(readOnly = true)
-    public ImpersonateResponse impersonate(Long restaurantId) {
+    public ImpersonateResponse impersonate(Long restaurantId, String actorEmail) {
+        if (actorEmail == null || actorEmail.isBlank()) {
+            throw new IllegalArgumentException("Se requiere el SuperAdmin autenticado para impersonar.");
+        }
+        String actor = actorEmail.trim().toLowerCase(Locale.ROOT);
+
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new IllegalArgumentException("Restaurante no encontrado."));
 
@@ -115,16 +120,23 @@ public class SuperAdminService {
                 .authorities("ROLE_" + owner.getRole().name())
                 .build();
 
-        String token = jwtService.generateToken(
+        String token = jwtService.generateImpersonationToken(
                 userDetails,
                 restaurant.getId(),
-                owner.getRole().name()
+                owner.getRole().name(),
+                actor
         );
+        long expiresInSeconds = Math.max(1L, jwtService.getImpersonationExpirationMs() / 1000L);
 
-        log.info(
-                "Impersonación: restaurant={} as user={}",
+        // Auditoría: quién entró a qué tenant como quién (buscar en logs por "Impersonación").
+        log.warn(
+                "Impersonación: actor={} restaurantId={} subdomain={} asUser={} role={} expiresInSeconds={}",
+                actor,
+                restaurant.getId(),
                 restaurant.getSubdomain(),
-                owner.getEmail()
+                owner.getEmail(),
+                owner.getRole().name(),
+                expiresInSeconds
         );
 
         return ImpersonateResponse.builder()
@@ -132,6 +144,9 @@ public class SuperAdminService {
                 .tenantSlug(restaurant.getSubdomain())
                 .restaurantName(restaurant.getName())
                 .loginPath("/admin/dashboard")
+                .expiresInSeconds(expiresInSeconds)
+                .impersonatedBy(actor)
+                .impersonatedAs(owner.getEmail())
                 .build();
     }
 

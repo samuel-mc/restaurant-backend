@@ -25,14 +25,12 @@ import org.springframework.messaging.simp.stomp.StompFrameHandler;
 import org.springframework.messaging.simp.stomp.StompHeaders;
 import org.springframework.messaging.simp.stomp.StompSession;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
-import org.springframework.security.core.userdetails.User;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -141,12 +139,8 @@ class WebSocketOrderIntegrationTest {
     void shouldReceiveOrderCreatedInRealTimeAndIsolateBetweenTenants() throws Exception {
         CompletableFuture<OrderResponse> completableFutureRestaurant1 = new CompletableFuture<>();
 
-        String token = jwtService.generateToken(
-                User.builder()
-                        .username("kitchen@pizzahut.test")
-                        .password("n/a")
-                        .authorities(Collections.emptyList())
-                        .build(),
+        String token = jwtService.generateWsTicket(
+                "kitchen@pizzahut.test",
                 restaurant1.getId(),
                 "COCINA"
         );

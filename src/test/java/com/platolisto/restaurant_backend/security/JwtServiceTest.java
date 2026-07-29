@@ -22,6 +22,8 @@ class JwtServiceTest {
         // Inyectamos valores que normalmente resuelve Spring mediante @Value
         ReflectionTestUtils.setField(jwtService, "secretKey", "AURb/z6vKSd0kHvQY/EnUgUEOaU1oZW5CiuuroWPdDwKyBBYWF4H2OkYR0hYXUhp");
         ReflectionTestUtils.setField(jwtService, "jwtExpiration", 86400000L); // 1 día
+        ReflectionTestUtils.setField(jwtService, "wsTicketExpirationMs", 60_000L);
+        ReflectionTestUtils.setField(jwtService, "impersonationExpirationMs", 1_800_000L);
 
         userDetails = new User("admin@platolisto.com", "password", Collections.emptyList());
     }
@@ -70,5 +72,31 @@ class JwtServiceTest {
         // When & Then
         assertThatThrownBy(() -> jwtService.isTokenValid(token, userDetails))
                 .isInstanceOf(io.jsonwebtoken.ExpiredJwtException.class);
+    }
+
+    @Test
+    void shouldGenerateShortLivedImpersonationTokenWithAuditClaims() {
+        String token = jwtService.generateImpersonationToken(
+                userDetails,
+                42L,
+                "OWNER",
+                "superadmin@platolisto.com"
+        );
+
+        assertThat(jwtService.isImpersonationToken(token)).isTrue();
+        assertThat(jwtService.extractImpersonatedBy(token)).isEqualTo("superadmin@platolisto.com");
+        assertThat(jwtService.extractUsername(token)).isEqualTo("admin@platolisto.com");
+        assertThat(jwtService.extractRestaurantId(token)).isEqualTo(42L);
+        assertThat(jwtService.extractRole(token)).isEqualTo("OWNER");
+        assertThat(jwtService.extractJti(token)).isNotBlank();
+        assertThat(jwtService.getImpersonationExpirationMs()).isEqualTo(1_800_000L);
+        assertThat(jwtService.isTokenValid(token, userDetails)).isTrue();
+    }
+
+    @Test
+    void shouldRejectImpersonationWithoutActor() {
+        assertThatThrownBy(() ->
+                jwtService.generateImpersonationToken(userDetails, 1L, "OWNER", "  ")
+        ).isInstanceOf(IllegalArgumentException.class);
     }
 }
