@@ -85,15 +85,17 @@ public class RestaurantProfileService {
                 ? restaurant.getPaymentStatus()
                 : PaymentStatus.ACTIVE;
 
-        if (!PlanLimits.canUsePickupAndDelivery(plan, paymentStatus)) {
+        if (!PlanLimits.canUseProServiceModules(plan, paymentStatus)) {
             if (Boolean.TRUE.equals(request.getHasDelivery())
-                    || Boolean.TRUE.equals(request.getHasPickup())) {
+                    || Boolean.TRUE.equals(request.getHasPickup())
+                    || Boolean.TRUE.equals(request.getHasReservations())) {
                 throw new IllegalArgumentException(
-                        "Para llevar y a domicilio están disponibles solo en Plan Pro con pago activo."
+                        "Para llevar, a domicilio y reservaciones están disponibles solo en Plan Pro con pago activo."
                 );
             }
             restaurant.setHasDelivery(false);
             restaurant.setHasPickup(false);
+            restaurant.setHasReservations(false);
         }
 
         if (request.getWebsitePublished() != null) {
@@ -157,7 +159,7 @@ public class RestaurantProfileService {
         PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
                 ? restaurant.getPaymentStatus()
                 : PaymentStatus.ACTIVE;
-        boolean pickupDeliveryAllowed = PlanLimits.canUsePickupAndDelivery(plan, paymentStatus);
+        boolean proModulesAllowed = PlanLimits.canUseProServiceModules(plan, paymentStatus);
 
         return RestaurantProfileResponse.builder()
                 .id(restaurant.getId())
@@ -172,9 +174,9 @@ public class RestaurantProfileService {
                 .googleMapsUrl(restaurant.getGoogleMapsUrl())
                 .whatsapp(restaurant.getWhatsapp())
                 .businessHours(restaurant.getBusinessHours())
-                .hasDelivery(pickupDeliveryAllowed && restaurant.isHasDelivery())
-                .hasPickup(pickupDeliveryAllowed && restaurant.isHasPickup())
-                .hasReservations(restaurant.isHasReservations())
+                .hasDelivery(proModulesAllowed && restaurant.isHasDelivery())
+                .hasPickup(proModulesAllowed && restaurant.isHasPickup())
+                .hasReservations(proModulesAllowed && restaurant.isHasReservations())
                 .orderingEnabled(restaurant.isOrderingEnabled())
                 .websitePublished(restaurant.isWebsitePublished())
                 .plan(plan.name())

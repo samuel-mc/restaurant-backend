@@ -119,9 +119,10 @@ public class SuperAdminService {
         } else {
             restaurant.setWebsitePublished(false);
         }
-        if (!PlanLimits.canUsePickupAndDelivery(plan, paymentStatus)) {
+        if (!PlanLimits.canUseProServiceModules(plan, paymentStatus)) {
             restaurant.setHasPickup(false);
             restaurant.setHasDelivery(false);
+            restaurant.setHasReservations(false);
         }
 
         Restaurant saved = restaurantRepository.save(restaurant);

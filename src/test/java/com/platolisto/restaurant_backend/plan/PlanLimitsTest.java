@@ -10,13 +10,13 @@ class PlanLimitsTest {
 
     @Test
     void pickupAndDeliveryOnlyForProWithActivePayment() {
-        assertThat(PlanLimits.canUsePickupAndDelivery(
+        assertThat(PlanLimits.canUseProServiceModules(
                 SubscriptionPlan.PRO, PaymentStatus.ACTIVE)).isTrue();
-        assertThat(PlanLimits.canUsePickupAndDelivery(
+        assertThat(PlanLimits.canUseProServiceModules(
                 SubscriptionPlan.PRO, PaymentStatus.PENDING_PAYMENT)).isFalse();
-        assertThat(PlanLimits.canUsePickupAndDelivery(
+        assertThat(PlanLimits.canUseProServiceModules(
                 SubscriptionPlan.BASIC, PaymentStatus.ACTIVE)).isFalse();
-        assertThat(PlanLimits.canUsePickupAndDelivery(
+        assertThat(PlanLimits.canUseProServiceModules(
                 SubscriptionPlan.BASIC, PaymentStatus.PENDING_PAYMENT)).isFalse();
     }
 }

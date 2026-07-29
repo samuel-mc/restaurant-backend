@@ -453,7 +453,7 @@ public class OrderService {
         PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
                 ? restaurant.getPaymentStatus()
                 : PaymentStatus.ACTIVE;
-        return PlanLimits.canUsePickupAndDelivery(plan, paymentStatus);
+        return PlanLimits.canUseProServiceModules(plan, paymentStatus);
     }
 
     /** A domicilio exige nombre, teléfono y dirección (además del @NotBlank de customerName). */

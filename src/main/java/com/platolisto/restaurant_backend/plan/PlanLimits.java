@@ -36,9 +36,14 @@ public final class PlanLimits {
     }
 
     /**
-     * Pickup y delivery: solo Plan Pro con pago activo.
+     * Pickup, delivery y reservaciones: solo Plan Pro con pago activo.
      */
-    public static boolean canUsePickupAndDelivery(SubscriptionPlan plan, PaymentStatus paymentStatus) {
+    public static boolean canUseProServiceModules(SubscriptionPlan plan, PaymentStatus paymentStatus) {
         return isProEntitled(plan, paymentStatus);
+    }
+
+    /** @deprecated usar {@link #canUseProServiceModules} */
+    public static boolean canUsePickupAndDelivery(SubscriptionPlan plan, PaymentStatus paymentStatus) {
+        return canUseProServiceModules(plan, paymentStatus);
     }
 }
