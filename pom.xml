@@ -128,6 +128,10 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
+					<!-- Solo afecta `mvn spring-boot:run`; el JAR empaquetado no lleva perfil. -->
+					<profiles>
+						<profile>local</profile>
+					</profiles>
 					<excludes>
 						<exclude>
 							<groupId>org.projectlombok</groupId>

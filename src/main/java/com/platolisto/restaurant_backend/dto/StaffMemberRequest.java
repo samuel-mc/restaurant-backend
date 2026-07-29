@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.dto;
 
 import com.platolisto.restaurant_backend.entity.StaffRole;
+import com.platolisto.restaurant_backend.security.StaffPinPolicy;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -22,6 +23,6 @@ public class StaffMemberRequest {
     private StaffRole role;
 
     @NotBlank(message = "El PIN es requerido")
-    @Pattern(regexp = "^\\d{4}$", message = "El PIN debe ser de exactamente 4 dígitos")
+    @Pattern(regexp = StaffPinPolicy.PIN_REGEXP, message = StaffPinPolicy.PIN_MESSAGE)
     private String pin;
 }

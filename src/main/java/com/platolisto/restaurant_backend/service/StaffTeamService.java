@@ -9,6 +9,7 @@ import com.platolisto.restaurant_backend.exception.TenantNotFoundException;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.repository.StaffMemberRepository;
+import com.platolisto.restaurant_backend.security.StaffPinPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -41,6 +42,7 @@ public class StaffTeamService {
         Restaurant restaurant = restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new TenantNotFoundException("Restaurante no encontrado."));
 
+        StaffPinPolicy.requireStrong(request.getPin());
         ensurePinUnique(restaurantId, request.getPin(), null);
 
         StaffMember member = StaffMember.builder()
@@ -69,6 +71,7 @@ public class StaffTeamService {
             member.setRole(request.getRole());
         }
         if (request.getPin() != null && !request.getPin().isBlank()) {
+            StaffPinPolicy.requireStrong(request.getPin());
             ensurePinUnique(restaurantId, request.getPin(), id);
             member.setPinHash(passwordEncoder.encode(request.getPin()));
         }

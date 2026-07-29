@@ -2,6 +2,7 @@ package com.platolisto.restaurant_backend.controller;
 
 import com.platolisto.restaurant_backend.dto.StaffPinLoginRequest;
 import com.platolisto.restaurant_backend.dto.StaffPinLoginResponse;
+import com.platolisto.restaurant_backend.security.ClientIpResolver;
 import com.platolisto.restaurant_backend.security.LoginAttemptService;
 import com.platolisto.restaurant_backend.service.StaffAuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,40 +22,33 @@ public class StaffAuthController {
 
     private final StaffAuthService staffAuthService;
     private final LoginAttemptService loginAttemptService;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping("/login-pin")
     public ResponseEntity<StaffPinLoginResponse> loginWithPin(
             @Valid @RequestBody StaffPinLoginRequest request,
             HttpServletRequest httpRequest
     ) {
-        String attemptKey = buildAttemptKey(httpRequest, request);
-        loginAttemptService.assertNotLocked(attemptKey);
+        String accountKey = accountKey(request);
+        String ipKey = ipKey(httpRequest);
+        loginAttemptService.assertNotLocked(accountKey, ipKey);
         try {
             StaffPinLoginResponse response = staffAuthService.loginWithPin(request);
-            loginAttemptService.recordSuccess(attemptKey);
+            loginAttemptService.recordSuccess(accountKey, ipKey);
             return ResponseEntity.ok(response);
         } catch (BadCredentialsException ex) {
-            loginAttemptService.recordFailure(attemptKey);
+            loginAttemptService.recordFailure(accountKey, ipKey);
             throw ex;
         }
     }
 
-    private String buildAttemptKey(HttpServletRequest request, StaffPinLoginRequest body) {
-        String ip = clientIp(request);
+    private static String accountKey(StaffPinLoginRequest body) {
         String staffId = body.getStaffId() != null ? body.getStaffId().toString() : "unknown";
         String slug = body.getTenantSlug() != null ? body.getTenantSlug().trim().toLowerCase() : "unknown";
-        return ip + "|" + slug + "|" + staffId;
+        return "pin:staff:" + slug + ":" + staffId;
     }
 
-    private String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-        return request.getRemoteAddr() != null ? request.getRemoteAddr() : "unknown";
+    private String ipKey(HttpServletRequest request) {
+        return "pin:ip:" + clientIpResolver.resolve(request);
     }
 }
