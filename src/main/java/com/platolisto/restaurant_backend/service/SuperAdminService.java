@@ -5,10 +5,13 @@ import com.platolisto.restaurant_backend.dto.LoginResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.ImpersonateResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminMetricsResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminTenantResponse;
+import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminTenantSubscriptionRequest;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Restaurant;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.entity.User;
 import com.platolisto.restaurant_backend.entity.UserRole;
+import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.repository.UserRepository;
 import com.platolisto.restaurant_backend.security.JwtService;
@@ -84,6 +87,51 @@ public class SuperAdminService {
         restaurant.setActive(active);
         Restaurant saved = restaurantRepository.save(restaurant);
         log.info("Tenant {} marcado active={}", saved.getSubdomain(), active);
+        return toTenantResponse(saved);
+    }
+
+    @Transactional
+    public SuperAdminTenantResponse updateTenantSubscription(
+            Long id,
+            SuperAdminTenantSubscriptionRequest request,
+            String actorEmail
+    ) {
+        String actor = actorEmail != null ? actorEmail.trim().toLowerCase(Locale.ROOT) : "unknown";
+        SubscriptionPlan plan = request.getPlan();
+        PaymentStatus paymentStatus = request.getPaymentStatus();
+        if (plan != SubscriptionPlan.BASIC && plan != SubscriptionPlan.PRO) {
+            throw new IllegalArgumentException("Plan no válido. Elige BASIC o PRO.");
+        }
+        if (paymentStatus != PaymentStatus.ACTIVE && paymentStatus != PaymentStatus.PENDING_PAYMENT) {
+            throw new IllegalArgumentException("Estado de pago no válido.");
+        }
+
+        Restaurant restaurant = restaurantRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Restaurante no encontrado."));
+
+        SubscriptionPlan previousPlan = restaurant.getPlan();
+        PaymentStatus previousPayment = restaurant.getPaymentStatus();
+
+        restaurant.setPlan(plan);
+        restaurant.setPaymentStatus(paymentStatus);
+        if (PlanLimits.canPublishWebsite(plan, paymentStatus)) {
+            restaurant.setWebsitePublished(true);
+        } else {
+            restaurant.setWebsitePublished(false);
+        }
+
+        Restaurant saved = restaurantRepository.save(restaurant);
+        log.warn(
+                "Suscripción SuperAdmin: actor={} restaurantId={} subdomain={} plan={}->{} payment={}->{} websitePublished={}",
+                actor,
+                saved.getId(),
+                saved.getSubdomain(),
+                previousPlan,
+                saved.getPlan(),
+                previousPayment,
+                saved.getPaymentStatus(),
+                saved.isWebsitePublished()
+        );
         return toTenantResponse(saved);
     }
 

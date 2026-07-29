@@ -6,6 +6,7 @@ import com.platolisto.restaurant_backend.dto.superadmin.ImpersonateResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminMetricsResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminTenantResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminTenantStatusRequest;
+import com.platolisto.restaurant_backend.dto.superadmin.SuperAdminTenantSubscriptionRequest;
 import com.platolisto.restaurant_backend.security.ClientIpResolver;
 import com.platolisto.restaurant_backend.security.LoginAttemptService;
 import com.platolisto.restaurant_backend.service.SuperAdminService;
@@ -77,6 +78,16 @@ public class SuperAdminController {
         return ResponseEntity.ok(
                 superAdminService.updateTenantStatus(id, Boolean.TRUE.equals(request.getActive()))
         );
+    }
+
+    @PatchMapping("/tenants/{id}/subscription")
+    public ResponseEntity<SuperAdminTenantResponse> updateSubscription(
+            @PathVariable Long id,
+            @Valid @RequestBody SuperAdminTenantSubscriptionRequest request,
+            Authentication authentication
+    ) {
+        String actor = authentication != null ? authentication.getName() : null;
+        return ResponseEntity.ok(superAdminService.updateTenantSubscription(id, request, actor));
     }
 
     @PostMapping("/tenants/{id}/impersonate")
