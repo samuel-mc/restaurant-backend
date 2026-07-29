@@ -1,0 +1,14 @@
+target/
+.git/
+.gitignore
+.mvn/
+.vscode/
+.agents/
+*.md
+.env
+.env.*
+**/application-local-secrets.properties
+uploads/
+Dockerfile
+docker-compose.yml
+scripts/

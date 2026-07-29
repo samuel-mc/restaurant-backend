@@ -21,6 +21,7 @@ import java.util.regex.Pattern;
 /**
  * Autentica CONNECT con ticket WS de corta vida y autoriza SUBSCRIBE a topics de cocina/admin.
  * El tracking público {@code /topic/order/{uuid}} permanece anónimo.
+ * Los clientes no pueden publicar en el broker ({@code SEND} a {@code /topic} / {@code /queue}).
  */
 @Component
 @RequiredArgsConstructor
@@ -54,9 +55,34 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
         if (StompCommand.SUBSCRIBE.equals(command)) {
             authorizeSubscribe(accessor);
+            return message;
+        }
+
+        if (StompCommand.SEND.equals(command) || StompCommand.MESSAGE.equals(command)) {
+            rejectClientBrokerPublish(accessor);
         }
 
         return message;
+    }
+
+    /**
+     * Solo el servidor publica en el simple broker. Un cliente STOMP no debe
+     * poder inyectar frames hacia {@code /topic/**} o {@code /queue/**}.
+     */
+    private void rejectClientBrokerPublish(StompHeaderAccessor accessor) {
+        String destination = accessor.getDestination();
+        if (destination == null || destination.isBlank()) {
+            throw new IllegalArgumentException("Envío WebSocket no permitido.");
+        }
+        String dest = destination.trim();
+        if (dest.startsWith("/topic") || dest.startsWith("/queue")) {
+            log.warn("SEND WebSocket denegado hacia broker: {}", dest);
+            throw new IllegalArgumentException("No está permitido publicar en este canal.");
+        }
+        // Prefijo /app es el destino de aplicación; no hay @MessageMapping hoy.
+        // Por defensa en profundidad, tampoco aceptamos SEND arbitrario.
+        log.warn("SEND WebSocket denegado hacia destino: {}", dest);
+        throw new IllegalArgumentException("No está permitido publicar en este canal.");
     }
 
     private void authenticateConnect(StompHeaderAccessor accessor) {

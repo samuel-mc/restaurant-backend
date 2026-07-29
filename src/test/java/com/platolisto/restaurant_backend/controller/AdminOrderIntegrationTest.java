@@ -9,6 +9,7 @@ import com.platolisto.restaurant_backend.entity.*;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.repository.*;
 import com.platolisto.restaurant_backend.security.JwtService;
+import com.platolisto.restaurant_backend.service.TableQrTokenService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -64,6 +65,9 @@ class AdminOrderIntegrationTest {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private TableQrTokenService tableQrTokenService;
 
     @MockitoBean
     private SimpMessagingTemplate messagingTemplate;
@@ -146,6 +150,7 @@ class AdminOrderIntegrationTest {
                 .customerName("Ana Lopez")
                 .orderType(OrderType.IN_TABLE)
                 .tableNumber("3")
+                .tableToken(tableQrTokenService.sign(mockRestaurant, "3"))
                 .details(List.of(d1))
                 .build();
 
@@ -170,6 +175,7 @@ class AdminOrderIntegrationTest {
                 .customerName("Ana Lopez")
                 .orderType(OrderType.IN_TABLE)
                 .tableNumber("3")
+                .tableToken(tableQrTokenService.sign(mockRestaurant, "3"))
                 .details(List.of(d1))
                 .build();
 

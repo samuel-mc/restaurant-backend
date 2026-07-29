@@ -21,6 +21,6 @@ public class PublicRestaurantController {
 
     @GetMapping("/profile")
     public ResponseEntity<RestaurantProfileResponse> getPublicProfile() {
-        return ResponseEntity.ok(restaurantProfileService.getProfile());
+        return ResponseEntity.ok(restaurantProfileService.getPublicProfile());
     }
 }

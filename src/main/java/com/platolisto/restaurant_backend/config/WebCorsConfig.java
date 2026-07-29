@@ -15,8 +15,14 @@ public class WebCorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        String[] patterns = allowedOrigins == null
+                ? new String[0]
+                : allowedOrigins.stream()
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .toArray(String[]::new);
         registry.addMapping("/**")
-                .allowedOriginPatterns(allowedOrigins.toArray(new String[0]))
+                .allowedOriginPatterns(patterns)
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("Authorization", "Cache-Control", "Content-Type", "X-Tenant")
                 .exposedHeaders("Authorization")

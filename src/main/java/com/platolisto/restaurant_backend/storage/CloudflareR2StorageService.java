@@ -13,10 +13,10 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -28,13 +28,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class CloudflareR2StorageService implements ObjectStorageService {
-
-    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/gif"
-    );
 
     private final S3Client r2S3Client;
 
@@ -61,25 +54,41 @@ public class CloudflareR2StorageService implements ObjectStorageService {
         }
 
         String slug = requireTenantSlug(tenantSlug);
-        String contentType = resolveContentType(file);
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException ex) {
+            throw new StorageException("No se pudo leer el archivo de imagen.", ex);
+        }
+        if (bytes.length == 0) {
+            throw new IllegalArgumentException("El archivo de imagen está vacío.");
+        }
+
+        ImageMagicBytes.DetectedImage detected = ImageMagicBytes.detect(bytes);
+        if (detected == null) {
+            throw new IllegalArgumentException(
+                    "Formato de imagen no soportado. Usa JPG, PNG, WEBP o GIF."
+            );
+        }
+
         String objectKey = "tenants/%s/%s/%s-%s".formatted(
                 slug,
                 folder,
                 UUID.randomUUID(),
-                sanitizeFilename(file.getOriginalFilename())
+                ImageMagicBytes.sanitizeFilename(file.getOriginalFilename(), detected.extension())
         );
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(objectKey)
-                .contentType(contentType)
-                .contentLength(file.getSize())
+                .contentType(detected.contentType())
+                .contentLength((long) bytes.length)
                 .build();
 
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = new ByteArrayInputStream(bytes)) {
             r2S3Client.putObject(
                     putRequest,
-                    RequestBody.fromInputStream(inputStream, file.getSize())
+                    RequestBody.fromInputStream(inputStream, bytes.length)
             );
         } catch (S3Exception ex) {
             log.error(
@@ -93,9 +102,6 @@ public class CloudflareR2StorageService implements ObjectStorageService {
                     "No se pudo subir la imagen a Cloudflare R2.",
                     ex
             );
-        } catch (IOException ex) {
-            log.error("No se pudo leer el MultipartFile para R2 [key={}]: {}", objectKey, ex.getMessage());
-            throw new StorageException("No se pudo leer el archivo de imagen.", ex);
         }
 
         String url = joinPublicUrl(publicUrl, objectKey);
@@ -110,37 +116,12 @@ public class CloudflareR2StorageService implements ObjectStorageService {
         return tenantSlug.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static String resolveContentType(MultipartFile file) {
-        String contentType = file.getContentType() != null
-                ? file.getContentType().toLowerCase(Locale.ROOT)
-                : "";
-        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
-            throw new IllegalArgumentException(
-                    "Formato de imagen no soportado. Usa JPG, PNG, WEBP o GIF."
-            );
-        }
-        return contentType;
-    }
-
     private static String sanitizeFolder(String folder) {
         if (folder == null || folder.isBlank()) {
             return "brand";
         }
         String cleaned = folder.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "");
         return cleaned.isBlank() ? "brand" : cleaned;
-    }
-
-    private static String sanitizeFilename(String originalFilename) {
-        String name = originalFilename == null || originalFilename.isBlank()
-                ? "image.bin"
-                : originalFilename.trim();
-        name = name.replace('\\', '/');
-        int slash = name.lastIndexOf('/');
-        if (slash >= 0) {
-            name = name.substring(slash + 1);
-        }
-        name = name.replaceAll("[^a-zA-Z0-9._-]", "_");
-        return name.isBlank() ? "image.bin" : name;
     }
 
     private static String joinPublicUrl(String baseUrl, String objectKey) {

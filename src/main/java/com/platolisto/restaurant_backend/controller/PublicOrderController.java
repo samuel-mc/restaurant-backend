@@ -3,7 +3,11 @@ package com.platolisto.restaurant_backend.controller;
 import com.platolisto.restaurant_backend.dto.ActiveSessionResponse;
 import com.platolisto.restaurant_backend.dto.OrderRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
+import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.security.ClientIpResolver;
+import com.platolisto.restaurant_backend.security.OrderCreationRateLimitService;
 import com.platolisto.restaurant_backend.service.OrderService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,11 +28,24 @@ import java.util.UUID;
 public class PublicOrderController {
 
     private final OrderService orderService;
+    private final OrderCreationRateLimitService orderCreationRateLimitService;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping
-    public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody OrderRequest request) {
-        OrderResponse response = orderService.createOrder(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    public ResponseEntity<OrderResponse> createOrder(
+            @Valid @RequestBody OrderRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        String ipKey = "orders:ip:" + clientIpResolver.resolve(httpRequest);
+        Long tenantId = TenantContext.getCurrentTenant();
+        String tenantKey = tenantId != null ? "orders:tenant:" + tenantId : null;
+        orderCreationRateLimitService.assertAllowed(ipKey, tenantKey);
+        try {
+            OrderResponse response = orderService.createOrder(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } finally {
+            orderCreationRateLimitService.record(ipKey, tenantKey);
+        }
     }
 
     /**

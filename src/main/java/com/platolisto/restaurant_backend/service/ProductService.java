@@ -1,5 +1,6 @@
 package com.platolisto.restaurant_backend.service;
 
+import com.platolisto.restaurant_backend.config.AllowedImageHosts;
 import com.platolisto.restaurant_backend.dto.ProductRequest;
 import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Category;
@@ -12,6 +13,7 @@ import com.platolisto.restaurant_backend.repository.CategoryRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.storage.ObjectStorageService;
+import com.platolisto.restaurant_backend.util.SafeHttpUrl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final RestaurantRepository restaurantRepository;
     private final ObjectStorageService objectStorageService;
+    private final AllowedImageHosts allowedImageHosts;
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
@@ -54,7 +57,7 @@ public class ProductService {
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new IllegalArgumentException("La categoría asociada no existe."));
 
-        String imageUrl = request.getImageUrl();
+        String imageUrl = normalizeImageUrl(request.getImageUrl());
         if (image != null && !image.isEmpty()) {
             imageUrl = objectStorageService.uploadImage(image, restaurant.getSubdomain());
         }
@@ -115,7 +118,7 @@ public class ProductService {
         if (image != null && !image.isEmpty()) {
             product.setImageUrl(objectStorageService.uploadImage(image, restaurant.getSubdomain()));
         } else if (request.getImageUrl() != null) {
-            product.setImageUrl(request.getImageUrl());
+            product.setImageUrl(normalizeImageUrl(request.getImageUrl()));
         }
 
         Product updated = productRepository.save(product);
@@ -151,6 +154,16 @@ public class ProductService {
             throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
         }
         return restaurantId;
+    }
+
+    private String normalizeImageUrl(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw.isBlank()) {
+            return null;
+        }
+        return SafeHttpUrl.requireAllowedImageUrl(raw, allowedImageHosts.hostSuffixes());
     }
 
     private ProductResponse mapToResponse(Product product) {

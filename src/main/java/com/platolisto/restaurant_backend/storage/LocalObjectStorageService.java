@@ -13,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Locale;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -28,13 +27,6 @@ import java.util.UUID;
 )
 @Slf4j
 public class LocalObjectStorageService implements ObjectStorageService {
-
-    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
-            "image/jpeg",
-            "image/png",
-            "image/webp",
-            "image/gif"
-    );
 
     private final Path rootDirectory;
     private final String publicBaseUrl;
@@ -67,16 +59,15 @@ public class LocalObjectStorageService implements ObjectStorageService {
             throw new IllegalArgumentException("El tenantSlug es requerido para subir la imagen.");
         }
 
-        String contentType = file.getContentType() != null
-                ? file.getContentType().toLowerCase(Locale.ROOT)
-                : "";
-        if (!ALLOWED_CONTENT_TYPES.contains(contentType)) {
+        byte[] header = readHeader(file);
+        ImageMagicBytes.DetectedImage detected = ImageMagicBytes.detect(header);
+        if (detected == null) {
             throw new IllegalArgumentException(
                     "Formato de imagen no soportado. Usa JPG, PNG, WEBP o GIF."
             );
         }
 
-        String safeName = sanitizeFilename(file.getOriginalFilename());
+        String safeName = ImageMagicBytes.sanitizeFilename(file.getOriginalFilename(), detected.extension());
         String relativeKey = "tenants/%s/%s/%s-%s".formatted(
                 tenantSlug.trim().toLowerCase(Locale.ROOT),
                 folder,
@@ -103,24 +94,23 @@ public class LocalObjectStorageService implements ObjectStorageService {
         return publicUrl;
     }
 
+    private static byte[] readHeader(MultipartFile file) {
+        try (InputStream in = file.getInputStream()) {
+            byte[] header = in.readNBytes(16);
+            if (header.length == 0) {
+                throw new IllegalArgumentException("El archivo de imagen está vacío.");
+            }
+            return header;
+        } catch (IOException ex) {
+            throw new StorageException("No se pudo leer el archivo de imagen.", ex);
+        }
+    }
+
     private static String sanitizeFolder(String folder) {
         if (folder == null || folder.isBlank()) {
             return "brand";
         }
         String cleaned = folder.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "");
         return cleaned.isBlank() ? "brand" : cleaned;
-    }
-
-    private static String sanitizeFilename(String originalFilename) {
-        String name = originalFilename == null || originalFilename.isBlank()
-                ? "image.bin"
-                : originalFilename.trim();
-        name = name.replace('\\', '/');
-        int slash = name.lastIndexOf('/');
-        if (slash >= 0) {
-            name = name.substring(slash + 1);
-        }
-        name = name.replaceAll("[^a-zA-Z0-9._-]", "_");
-        return name.isBlank() ? "image.bin" : name;
     }
 }

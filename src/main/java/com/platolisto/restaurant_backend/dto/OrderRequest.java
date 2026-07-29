@@ -32,7 +32,8 @@ public class OrderRequest {
     private String tableNumber;
 
     /**
-     * Token del QR de mesa ({@code ?t=}). Obligatorio para abrir pedido IN_TABLE nuevo.
+     * Token del QR de mesa ({@code ?t=}). Obligatorio para pedidos IN_TABLE
+     * (abrir cuenta y añadir rondas). El UUID de tracking no autoriza mutaciones.
      */
     @Size(max = 64, message = "Token de mesa inválido")
     private String tableToken;
@@ -41,7 +42,8 @@ public class OrderRequest {
 
     /**
      * UUID de una orden activa de la mesa (sesión del comensal).
-     * Si está presente y la orden sigue abierta, se agrega una nueva ronda.
+     * Si está presente y la orden sigue abierta, se agrega una nueva ronda
+     * (sigue haciendo falta {@link #tableToken} válido de esa mesa).
      */
     private UUID activeOrderUuid;
 

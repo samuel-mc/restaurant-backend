@@ -6,6 +6,7 @@ import com.platolisto.restaurant_backend.dto.OrderRequest;
 import com.platolisto.restaurant_backend.entity.*;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.repository.*;
+import com.platolisto.restaurant_backend.service.TableQrTokenService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,9 @@ class OrderIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private TableQrTokenService tableQrTokenService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -154,6 +158,7 @@ class OrderIntegrationTest {
                 .customerPhone("55512345")
                 .orderType(OrderType.IN_TABLE)
                 .tableNumber("5")
+                .tableToken(tableQrTokenService.sign(activeRestaurant, "5"))
                 .details(List.of(d1, d2))
                 .build();
 

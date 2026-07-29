@@ -1,5 +1,6 @@
 package com.platolisto.restaurant_backend.service;
 
+import com.platolisto.restaurant_backend.config.AllowedImageHosts;
 import com.platolisto.restaurant_backend.dto.CategoryResponse;
 import com.platolisto.restaurant_backend.dto.MenuImportResultDTO;
 import com.platolisto.restaurant_backend.dto.MenuImportRowError;
@@ -14,6 +15,7 @@ import com.platolisto.restaurant_backend.repository.CategoryRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.util.CategoryNameNormalizer;
+import com.platolisto.restaurant_backend.util.SafeHttpUrl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -60,6 +62,7 @@ public class MenuImportService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final RestaurantRepository restaurantRepository;
+    private final AllowedImageHosts allowedImageHosts;
 
     /**
      * Genera la plantilla .xlsx estilizada con una fila de ejemplo.
@@ -315,7 +318,7 @@ public class MenuImportService {
         );
     }
 
-    private static String parseOptionalImageUrl(String raw) {
+    private String parseOptionalImageUrl(String raw) {
         if (isBlank(raw)) {
             return null;
         }
@@ -325,13 +328,11 @@ public class MenuImportService {
                     "Url_Imagen supera " + MAX_IMAGE_URL_LEN + " caracteres."
             );
         }
-        String lower = url.toLowerCase(Locale.ROOT);
-        if (!lower.startsWith("http://") && !lower.startsWith("https://")) {
-            throw new RowValidationException(
-                    "Url_Imagen debe iniciar con http:// o https://."
-            );
+        try {
+            return SafeHttpUrl.requireAllowedImageUrl(url, allowedImageHosts.hostSuffixes());
+        } catch (IllegalArgumentException e) {
+            throw new RowValidationException(e.getMessage());
         }
-        return url;
     }
 
     private static BigDecimal parsePrice(String raw) {

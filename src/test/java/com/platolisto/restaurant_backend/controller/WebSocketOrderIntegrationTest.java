@@ -16,6 +16,7 @@ import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.security.JwtService;
 import com.platolisto.restaurant_backend.service.OrderService;
+import com.platolisto.restaurant_backend.service.TableQrTokenService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,9 @@ class WebSocketOrderIntegrationTest {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private TableQrTokenService tableQrTokenService;
 
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
@@ -221,6 +225,7 @@ class WebSocketOrderIntegrationTest {
                 .customerName("Carlos en PizzaHut")
                 .orderType(OrderType.IN_TABLE)
                 .tableNumber("4")
+                .tableToken(tableQrTokenService.sign(restaurant1, "4"))
                 .details(List.of(itemRestaurant1))
                 .build();
 

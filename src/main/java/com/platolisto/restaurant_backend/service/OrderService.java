@@ -236,22 +236,27 @@ public class OrderService {
         }
         Order byUuid = orderRepository.findByUuidWithDetails(request.getActiveOrderUuid())
                 .orElse(null);
-        if (byUuid != null
-                && byUuid.getRestaurant().getId().equals(restaurantId)
-                && OPEN_STATUSES.contains(byUuid.getStatus())) {
-            return byUuid;
+        if (byUuid == null
+                || !byUuid.getRestaurant().getId().equals(restaurantId)
+                || !OPEN_STATUSES.contains(byUuid.getStatus())) {
+            return null;
         }
-        return null;
+        // El UUID de tracking no autoriza: debe coincidir la mesa ya validada por QR.
+        String requestTable = normalizeTable(request.getTableNumber());
+        String orderTable = normalizeTable(byUuid.getTableNumber());
+        if (requestTable == null || orderTable == null || !requestTable.equals(orderTable)) {
+            throw new IllegalArgumentException(
+                    "El pedido activo no corresponde a esta mesa. Escanea el código QR de tu mesa."
+            );
+        }
+        return byUuid;
     }
 
     private void validateTableAccess(Restaurant restaurant, OrderRequest request) {
         if (request.getOrderType() != OrderType.IN_TABLE) {
             return;
         }
-        // Adición a cuenta ya unida: el UUID es el capability; el token se validó al escanear.
-        if (request.getActiveOrderUuid() != null) {
-            return;
-        }
+        // Siempre exigir token QR (también al añadir rondas): el UUID público no es capability.
         String table = normalizeTable(request.getTableNumber());
         if (table == null) {
             throw new IllegalArgumentException("El número de mesa es requerido.");

@@ -9,6 +9,7 @@ import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.storage.ObjectStorageService;
+import com.platolisto.restaurant_backend.util.SafeHttpUrl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,7 +31,13 @@ public class RestaurantProfileService {
 
     @Transactional(readOnly = true)
     public RestaurantProfileResponse getProfile() {
-        return mapToResponse(requireCurrentRestaurant());
+        return mapToResponse(requireCurrentRestaurant(), true);
+    }
+
+    /** Perfil público: sin plan ni estado de cobro. */
+    @Transactional(readOnly = true)
+    public RestaurantProfileResponse getPublicProfile() {
+        return mapToResponse(requireCurrentRestaurant(), false);
     }
 
     @Transactional
@@ -57,7 +64,7 @@ public class RestaurantProfileService {
             restaurant.setAddress(blankToNull(request.getAddress()));
         }
         if (request.getGoogleMapsUrl() != null) {
-            restaurant.setGoogleMapsUrl(blankToNull(request.getGoogleMapsUrl()));
+            restaurant.setGoogleMapsUrl(SafeHttpUrl.requireGoogleMapsUrl(request.getGoogleMapsUrl()));
         }
         if (request.getWhatsapp() != null) {
             restaurant.setWhatsapp(blankToNull(request.getWhatsapp()));
@@ -119,7 +126,7 @@ public class RestaurantProfileService {
 
         Restaurant saved = restaurantRepository.save(restaurant);
         log.info("Perfil del restaurante actualizado: {}", saved.getSubdomain());
-        return mapToResponse(saved);
+        return mapToResponse(saved, true);
     }
 
     private Restaurant requireCurrentRestaurant() {
@@ -152,7 +159,7 @@ public class RestaurantProfileService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private static RestaurantProfileResponse mapToResponse(Restaurant restaurant) {
+    private static RestaurantProfileResponse mapToResponse(Restaurant restaurant, boolean includeBilling) {
         SubscriptionPlan plan = restaurant.getPlan() != null
                 ? restaurant.getPlan()
                 : SubscriptionPlan.BASIC;
@@ -161,7 +168,7 @@ public class RestaurantProfileService {
                 : PaymentStatus.ACTIVE;
         boolean proModulesAllowed = PlanLimits.canUseProServiceModules(plan, paymentStatus);
 
-        return RestaurantProfileResponse.builder()
+        RestaurantProfileResponse.RestaurantProfileResponseBuilder builder = RestaurantProfileResponse.builder()
                 .id(restaurant.getId())
                 .name(restaurant.getName())
                 .subdomain(restaurant.getSubdomain())
@@ -179,9 +186,12 @@ public class RestaurantProfileService {
                 .hasReservations(proModulesAllowed && restaurant.isHasReservations())
                 .orderingEnabled(restaurant.isOrderingEnabled())
                 .websitePublished(restaurant.isWebsitePublished())
-                .plan(plan.name())
-                .paymentStatus(paymentStatus.name())
-                .updatedAt(restaurant.getUpdatedAt())
-                .build();
+                .updatedAt(restaurant.getUpdatedAt());
+
+        if (includeBilling) {
+            builder.plan(plan.name()).paymentStatus(paymentStatus.name());
+        }
+
+        return builder.build();
     }
 }
