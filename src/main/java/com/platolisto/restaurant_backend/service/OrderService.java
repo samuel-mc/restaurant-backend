@@ -11,9 +11,12 @@ import com.platolisto.restaurant_backend.entity.OrderDetail;
 import com.platolisto.restaurant_backend.entity.OrderItemStatus;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
 import com.platolisto.restaurant_backend.entity.OrderType;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.OrderRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
@@ -427,20 +430,30 @@ public class OrderService {
             case IN_TABLE -> {
             }
             case PICKUP -> {
-                if (!restaurant.isHasPickup()) {
+                if (!isPickupDeliveryAllowed(restaurant) || !restaurant.isHasPickup()) {
                     throw new IllegalArgumentException(
                             "Este restaurante no tiene habilitado el módulo de recoger (pickup)."
                     );
                 }
             }
             case DELIVERY -> {
-                if (!restaurant.isHasDelivery()) {
+                if (!isPickupDeliveryAllowed(restaurant) || !restaurant.isHasDelivery()) {
                     throw new IllegalArgumentException(
                             "Este restaurante no tiene habilitado el módulo de delivery."
                     );
                 }
             }
         }
+    }
+
+    private static boolean isPickupDeliveryAllowed(Restaurant restaurant) {
+        SubscriptionPlan plan = restaurant.getPlan() != null
+                ? restaurant.getPlan()
+                : SubscriptionPlan.BASIC;
+        PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
+                ? restaurant.getPaymentStatus()
+                : PaymentStatus.ACTIVE;
+        return PlanLimits.canUsePickupAndDelivery(plan, paymentStatus);
     }
 
     /** A domicilio exige nombre, teléfono y dirección (además del @NotBlank de customerName). */

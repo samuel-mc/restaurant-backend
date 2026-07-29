@@ -78,10 +78,12 @@ class SuperAdminSubscriptionServiceTest {
     }
 
     @Test
-    void downgradeToBasicUnpublishesWebsite() {
+    void downgradeToBasicUnpublishesWebsiteAndClearsPickupDelivery() {
         restaurant.setPlan(SubscriptionPlan.PRO);
         restaurant.setPaymentStatus(PaymentStatus.ACTIVE);
         restaurant.setWebsitePublished(true);
+        restaurant.setHasPickup(true);
+        restaurant.setHasDelivery(true);
         when(restaurantRepository.findById(10L)).thenReturn(Optional.of(restaurant));
         when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -94,6 +96,10 @@ class SuperAdminSubscriptionServiceTest {
 
         assertThat(response.getPlan()).isEqualTo("BASIC");
         assertThat(response.isWebsitePublished()).isFalse();
+        ArgumentCaptor<Restaurant> captor = ArgumentCaptor.forClass(Restaurant.class);
+        verify(restaurantRepository).save(captor.capture());
+        assertThat(captor.getValue().isHasPickup()).isFalse();
+        assertThat(captor.getValue().isHasDelivery()).isFalse();
     }
 
     @Test

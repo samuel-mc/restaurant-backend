@@ -34,4 +34,11 @@ public final class PlanLimits {
     public static boolean isProEntitled(SubscriptionPlan plan, PaymentStatus paymentStatus) {
         return plan == SubscriptionPlan.PRO && paymentStatus == PaymentStatus.ACTIVE;
     }
+
+    /**
+     * Pickup y delivery: solo Plan Pro con pago activo.
+     */
+    public static boolean canUsePickupAndDelivery(SubscriptionPlan plan, PaymentStatus paymentStatus) {
+        return isProEntitled(plan, paymentStatus);
+    }
 }

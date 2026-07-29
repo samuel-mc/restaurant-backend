@@ -77,13 +77,26 @@ public class RestaurantProfileService {
         if (request.getOrderingEnabled() != null) {
             restaurant.setOrderingEnabled(request.getOrderingEnabled());
         }
+
+        SubscriptionPlan plan = restaurant.getPlan() != null
+                ? restaurant.getPlan()
+                : SubscriptionPlan.BASIC;
+        PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
+                ? restaurant.getPaymentStatus()
+                : PaymentStatus.ACTIVE;
+
+        if (!PlanLimits.canUsePickupAndDelivery(plan, paymentStatus)) {
+            if (Boolean.TRUE.equals(request.getHasDelivery())
+                    || Boolean.TRUE.equals(request.getHasPickup())) {
+                throw new IllegalArgumentException(
+                        "Para llevar y a domicilio están disponibles solo en Plan Pro con pago activo."
+                );
+            }
+            restaurant.setHasDelivery(false);
+            restaurant.setHasPickup(false);
+        }
+
         if (request.getWebsitePublished() != null) {
-            SubscriptionPlan plan = restaurant.getPlan() != null
-                    ? restaurant.getPlan()
-                    : SubscriptionPlan.BASIC;
-            PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
-                    ? restaurant.getPaymentStatus()
-                    : PaymentStatus.ACTIVE;
             if (Boolean.TRUE.equals(request.getWebsitePublished())
                     && !PlanLimits.canPublishWebsite(plan, paymentStatus)) {
                 throw new IllegalArgumentException(
@@ -138,6 +151,14 @@ public class RestaurantProfileService {
     }
 
     private static RestaurantProfileResponse mapToResponse(Restaurant restaurant) {
+        SubscriptionPlan plan = restaurant.getPlan() != null
+                ? restaurant.getPlan()
+                : SubscriptionPlan.BASIC;
+        PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
+                ? restaurant.getPaymentStatus()
+                : PaymentStatus.ACTIVE;
+        boolean pickupDeliveryAllowed = PlanLimits.canUsePickupAndDelivery(plan, paymentStatus);
+
         return RestaurantProfileResponse.builder()
                 .id(restaurant.getId())
                 .name(restaurant.getName())
@@ -151,15 +172,13 @@ public class RestaurantProfileService {
                 .googleMapsUrl(restaurant.getGoogleMapsUrl())
                 .whatsapp(restaurant.getWhatsapp())
                 .businessHours(restaurant.getBusinessHours())
-                .hasDelivery(restaurant.isHasDelivery())
-                .hasPickup(restaurant.isHasPickup())
+                .hasDelivery(pickupDeliveryAllowed && restaurant.isHasDelivery())
+                .hasPickup(pickupDeliveryAllowed && restaurant.isHasPickup())
                 .hasReservations(restaurant.isHasReservations())
                 .orderingEnabled(restaurant.isOrderingEnabled())
                 .websitePublished(restaurant.isWebsitePublished())
-                .plan(restaurant.getPlan() != null ? restaurant.getPlan().name() : "BASIC")
-                .paymentStatus(restaurant.getPaymentStatus() != null
-                        ? restaurant.getPaymentStatus().name()
-                        : PaymentStatus.ACTIVE.name())
+                .plan(plan.name())
+                .paymentStatus(paymentStatus.name())
                 .updatedAt(restaurant.getUpdatedAt())
                 .build();
     }

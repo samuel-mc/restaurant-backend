@@ -6,8 +6,10 @@ import com.platolisto.restaurant_backend.dto.OrderRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
 import com.platolisto.restaurant_backend.entity.Category;
 import com.platolisto.restaurant_backend.entity.OrderType;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
+import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.repository.CategoryRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
@@ -76,6 +78,8 @@ class WebSocketOrderIntegrationTest {
                 .name("Pizza Hut")
                 .subdomain("pizzahut")
                 .isActive(true)
+                .plan(SubscriptionPlan.PRO)
+                .paymentStatus(PaymentStatus.ACTIVE)
                 .orderingEnabled(true)
                 .hasPickup(true)
                 .build());
@@ -84,6 +88,8 @@ class WebSocketOrderIntegrationTest {
                 .name("Burger King")
                 .subdomain("burgerking")
                 .isActive(true)
+                .plan(SubscriptionPlan.PRO)
+                .paymentStatus(PaymentStatus.ACTIVE)
                 .orderingEnabled(true)
                 .hasPickup(true)
                 .build());
