@@ -96,6 +96,13 @@ public class Restaurant {
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
 
+    /**
+     * Secreto Base64 (32 bytes) para firmar tokens de QR de mesa.
+     * Se genera de forma perezosa al firmar el primer QR.
+     */
+    @Column(name = "table_qr_secret", length = 64)
+    private String tableQrSecret;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

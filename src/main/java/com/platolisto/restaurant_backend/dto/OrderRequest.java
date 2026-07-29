@@ -31,6 +31,12 @@ public class OrderRequest {
     @Size(max = 10, message = "El número de mesa no puede superar los 10 caracteres")
     private String tableNumber;
 
+    /**
+     * Token del QR de mesa ({@code ?t=}). Obligatorio para abrir pedido IN_TABLE nuevo.
+     */
+    @Size(max = 64, message = "Token de mesa inválido")
+    private String tableToken;
+
     private String deliveryAddress;
 
     /**

@@ -33,13 +33,14 @@ public class PublicOrderController {
 
     /**
      * Sesión activa de una mesa (cuenta abierta).
-     * El tenant se resuelve por cabecera {@code X-Tenant}.
+     * Requiere token del QR ({@code tableToken}); sin él no se revela si hay cuenta.
      */
     @GetMapping("/active-session")
     public ResponseEntity<ActiveSessionResponse> getActiveSession(
-            @RequestParam("tableNumber") String tableNumber
+            @RequestParam("tableNumber") String tableNumber,
+            @RequestParam(value = "tableToken", required = false) String tableToken
     ) {
-        ActiveSessionResponse session = orderService.getActiveSessionByTable(tableNumber);
+        ActiveSessionResponse session = orderService.getActiveSessionByTable(tableNumber, tableToken);
         if (!session.isHasActiveOrder()) {
             return ResponseEntity.noContent().build();
         }

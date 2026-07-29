@@ -61,6 +61,7 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final RestaurantRepository restaurantRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final TableQrTokenService tableQrTokenService;
 
     @Transactional
     public OrderResponse createOrder(OrderRequest request) {
@@ -80,13 +81,14 @@ public class OrderService {
 
         validateOrderTypeAllowed(restaurant, request.getOrderType());
         validateDeliveryContact(request);
+        validateTableAccess(restaurant, request);
 
         Order openOrder = findOpenOrderForAddition(request, restaurantId);
         if (openOrder != null) {
-            return appendRound(openOrder, request, restaurantId, restaurant);
+            return stripPublicPii(appendRound(openOrder, request, restaurantId, restaurant));
         }
 
-        return createFreshOrder(request, restaurantId, restaurant);
+        return stripPublicPii(createFreshOrder(request, restaurantId, restaurant));
     }
 
     private OrderResponse createFreshOrder(
@@ -201,45 +203,43 @@ public class OrderService {
     }
 
     /**
-     * Busca orden abierta: primero por UUID de sesión; si no, por mesa (IN_TABLE).
+     * Busca orden abierta solo por UUID de sesión (nunca solo por número de mesa).
      */
     private Order findOpenOrderForAddition(OrderRequest request, Long restaurantId) {
-        if (request.getActiveOrderUuid() != null) {
-            Order byUuid = orderRepository.findByUuidWithDetails(request.getActiveOrderUuid())
-                    .orElse(null);
-            if (byUuid != null
-                    && byUuid.getRestaurant().getId().equals(restaurantId)
-                    && OPEN_STATUSES.contains(byUuid.getStatus())) {
-                return byUuid;
-            }
-        }
-
-        if (request.getOrderType() != OrderType.IN_TABLE) {
+        if (request.getActiveOrderUuid() == null) {
             return null;
         }
+        Order byUuid = orderRepository.findByUuidWithDetails(request.getActiveOrderUuid())
+                .orElse(null);
+        if (byUuid != null
+                && byUuid.getRestaurant().getId().equals(restaurantId)
+                && OPEN_STATUSES.contains(byUuid.getStatus())) {
+            return byUuid;
+        }
+        return null;
+    }
 
+    private void validateTableAccess(Restaurant restaurant, OrderRequest request) {
+        if (request.getOrderType() != OrderType.IN_TABLE) {
+            return;
+        }
+        // Adición a cuenta ya unida: el UUID es el capability; el token se validó al escanear.
+        if (request.getActiveOrderUuid() != null) {
+            return;
+        }
         String table = normalizeTable(request.getTableNumber());
         if (table == null) {
-            return null;
+            throw new IllegalArgumentException("El número de mesa es requerido.");
         }
-
-        return orderRepository
-                .findOpenInTableWithDetails(table, OrderType.IN_TABLE, OPEN_STATUSES)
-                .stream()
-                .max(Comparator.comparing(Order::getCreatedAt))
-                .orElse(null);
+        tableQrTokenService.requireValid(restaurant, table, request.getTableToken());
     }
 
     private static String normalizeTable(String tableNumber) {
-        if (tableNumber == null) {
-            return null;
-        }
-        String trimmed = tableNumber.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        return TableQrTokenService.normalizeTable(tableNumber);
     }
 
     @Transactional(readOnly = true)
-    public ActiveSessionResponse getActiveSessionByTable(String tableNumber) {
+    public ActiveSessionResponse getActiveSessionByTable(String tableNumber, String tableToken) {
         Long restaurantId = TenantContext.getCurrentTenant();
         if (restaurantId == null) {
             throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
@@ -247,6 +247,14 @@ public class OrderService {
 
         String table = normalizeTable(tableNumber);
         if (table == null) {
+            return ActiveSessionResponse.builder().hasActiveOrder(false).build();
+        }
+
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+
+        // Sin token válido: no revelar si hay cuenta abierta.
+        if (!tableQrTokenService.verify(restaurant, table, tableToken)) {
             return ActiveSessionResponse.builder().hasActiveOrder(false).build();
         }
 
@@ -262,7 +270,7 @@ public class OrderService {
 
         return ActiveSessionResponse.builder()
                 .hasActiveOrder(true)
-                .order(mapToResponse(open))
+                .order(mapToPublicResponse(open))
                 .build();
     }
 
@@ -408,7 +416,7 @@ public class OrderService {
             throw new IllegalArgumentException("No se encontró el pedido con UUID: " + uuid);
         }
 
-        return mapToResponse(order);
+        return mapToPublicResponse(order);
     }
 
     private static void validateOrderTypeAllowed(Restaurant restaurant, OrderType orderType) {
@@ -540,8 +548,9 @@ public class OrderService {
             messagingTemplate.convertAndSend(kitchenBySlug, response);
         }
 
-        String trackingTopic = "/topic/order/" + response.getUuid();
-        messagingTemplate.convertAndSend(trackingTopic, response);
+        OrderResponse publicView = stripPublicPii(response);
+        String trackingTopic = "/topic/order/" + publicView.getUuid();
+        messagingTemplate.convertAndSend(trackingTopic, publicView);
     }
 
     private OrderResponse mapToResponse(Order order) {
@@ -578,6 +587,31 @@ public class OrderService {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())
                 .details(detailsResponse)
+                .build();
+    }
+
+    /** Vista pública: sin teléfono ni dirección (copia; no muta la vista admin/cocina). */
+    private OrderResponse mapToPublicResponse(Order order) {
+        return stripPublicPii(mapToResponse(order));
+    }
+
+    private static OrderResponse stripPublicPii(OrderResponse response) {
+        if (response == null) {
+            return null;
+        }
+        return OrderResponse.builder()
+                .id(response.getId())
+                .uuid(response.getUuid())
+                .customerName(response.getCustomerName())
+                .customerPhone(null)
+                .orderType(response.getOrderType())
+                .tableNumber(response.getTableNumber())
+                .deliveryAddress(null)
+                .status(response.getStatus())
+                .totalAmount(response.getTotalAmount())
+                .createdAt(response.getCreatedAt())
+                .updatedAt(response.getUpdatedAt())
+                .details(response.getDetails())
                 .build();
     }
 }
