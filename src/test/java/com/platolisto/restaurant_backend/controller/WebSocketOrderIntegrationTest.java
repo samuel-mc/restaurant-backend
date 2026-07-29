@@ -76,12 +76,16 @@ class WebSocketOrderIntegrationTest {
                 .name("Pizza Hut")
                 .subdomain("pizzahut")
                 .isActive(true)
+                .orderingEnabled(true)
+                .hasPickup(true)
                 .build());
 
         restaurant2 = restaurantRepository.save(Restaurant.builder()
                 .name("Burger King")
                 .subdomain("burgerking")
                 .isActive(true)
+                .orderingEnabled(true)
+                .hasPickup(true)
                 .build());
 
         Category cat1 = categoryRepository.save(Category.builder()

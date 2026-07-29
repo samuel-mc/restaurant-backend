@@ -84,6 +84,7 @@ class AdminOrderIntegrationTest {
                 .name("Burgers")
                 .subdomain("burgers")
                 .isActive(true)
+                .orderingEnabled(true)
                 .build());
 
         // 2. Crear Administrador

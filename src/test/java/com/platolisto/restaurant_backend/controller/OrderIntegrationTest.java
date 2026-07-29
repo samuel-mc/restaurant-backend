@@ -68,12 +68,18 @@ class OrderIntegrationTest {
                 .name("Pizza Hut")
                 .subdomain("pizzahut")
                 .isActive(true)
+                .orderingEnabled(true)
+                .hasPickup(true)
+                .hasDelivery(true)
                 .build());
 
         otherRestaurant = restaurantRepository.save(Restaurant.builder()
                 .name("Burger King")
                 .subdomain("burgerking")
                 .isActive(true)
+                .orderingEnabled(true)
+                .hasPickup(true)
+                .hasDelivery(true)
                 .build());
 
         // 2. Crear Categoría en restaurante activo

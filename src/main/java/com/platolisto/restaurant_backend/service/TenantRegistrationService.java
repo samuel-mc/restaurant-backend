@@ -60,6 +60,11 @@ public class TenantRegistrationService {
                 .plan(plan)
                 .paymentStatus(paymentStatus)
                 .websitePublished(false)
+                // Módulos operativos apagados hasta que el dueño los active en settings.
+                .hasDelivery(false)
+                .hasPickup(false)
+                .hasReservations(false)
+                .orderingEnabled(false)
                 .build());
 
         boolean couponApplied = couponService.applyCouponAtRegistration(

@@ -62,7 +62,7 @@ public class Restaurant {
 
     @Builder.Default
     @Column(name = "has_pickup", nullable = false)
-    private boolean hasPickup = true;
+    private boolean hasPickup = false;
 
     @Builder.Default
     @Column(name = "has_reservations", nullable = false)
@@ -70,10 +70,11 @@ public class Restaurant {
 
     /**
      * Si el menú digital acepta pedidos. Si es {@code false}, el menú es solo consulta.
+     * Nuevos tenants arrancan desactivado; el dueño lo activa en settings.
      */
     @Builder.Default
     @Column(name = "ordering_enabled", nullable = false)
-    private boolean orderingEnabled = true;
+    private boolean orderingEnabled = false;
 
     /** Si el website institucional del tenant está visible al público. */
     @Builder.Default
