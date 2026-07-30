@@ -30,6 +30,8 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
     private static final Pattern ADMIN_SLUG_TOPIC =
             Pattern.compile("^/topic/admin/([^/]+)/orders$");
+    private static final Pattern ADMIN_FEEDBACK_TOPIC =
+            Pattern.compile("^/topic/admin/([^/]+)/feedback$");
     private static final Pattern RESTAURANT_ID_TOPIC =
             Pattern.compile("^/topic/restaurants/(\\d+)/orders$");
     private static final Pattern ORDER_TRACKING_TOPIC =
@@ -121,6 +123,12 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
             return;
         }
 
+        Matcher feedbackMatcher = ADMIN_FEEDBACK_TOPIC.matcher(destination);
+        if (feedbackMatcher.matches()) {
+            requireAdminInboxAccess(accessor, resolveRestaurantIdBySlug(feedbackMatcher.group(1)));
+            return;
+        }
+
         Matcher restaurantMatcher = RESTAURANT_ID_TOPIC.matcher(destination);
         if (restaurantMatcher.matches()) {
             requireKitchenAccess(accessor, Long.parseLong(restaurantMatcher.group(1)));
@@ -129,6 +137,21 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
         log.warn("Suscripción WebSocket denegada a destino no permitido: {}", destination);
         throw new IllegalArgumentException("Destino de suscripción no permitido.");
+    }
+
+    private void requireAdminInboxAccess(StompHeaderAccessor accessor, Long requiredRestaurantId) {
+        Principal principal = accessor.getUser();
+        if (!(principal instanceof WsAuthenticatedPrincipal wsUser)) {
+            throw new IllegalArgumentException("Se requiere autenticación para este canal.");
+        }
+        if (!wsUser.canAccessAdminInbox()) {
+            throw new IllegalArgumentException("Rol no autorizado para el inbox de feedback.");
+        }
+        if (requiredRestaurantId == null
+                || wsUser.restaurantId() == null
+                || !requiredRestaurantId.equals(wsUser.restaurantId())) {
+            throw new IllegalArgumentException("Acceso denegado a este restaurante.");
+        }
     }
 
     private void requireKitchenAccess(StompHeaderAccessor accessor, Long requiredRestaurantId) {

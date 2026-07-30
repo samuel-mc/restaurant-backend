@@ -26,4 +26,13 @@ public record WsAuthenticatedPrincipal(
             default -> false;
         };
     }
+
+    /** Inbox de reclamos Smart Rating: solo dueño / admin. */
+    public boolean canAccessAdminInbox() {
+        if (role == null || role.isBlank()) {
+            return false;
+        }
+        String normalized = role.trim().toUpperCase().replace("ROLE_", "");
+        return "OWNER".equals(normalized) || "ADMIN".equals(normalized);
+    }
 }

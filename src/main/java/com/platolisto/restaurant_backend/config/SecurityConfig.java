@@ -82,7 +82,8 @@ public class SecurityConfig {
                         "/api/v1/admin/menu/**",
                         "/api/v1/admin/restaurants/**",
                         "/api/v1/admin/analytics/**",
-                        "/api/v1/admin/table-qr/**"
+                        "/api/v1/admin/table-qr/**",
+                        "/api/v1/admin/feedback/**"
                 ).hasAnyRole("ADMIN", "OWNER")
 
                 // Cualquier otra ruta admin: solo ADMIN/OWNER
