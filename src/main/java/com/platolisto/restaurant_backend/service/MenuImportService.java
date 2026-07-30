@@ -496,6 +496,7 @@ public class MenuImportService {
                 .categoryId(product.getCategory().getId())
                 .categoryName(product.getCategory().getName())
                 .createdAt(product.getCreatedAt())
+                .modifierGroups(java.util.List.of())
                 .build();
     }
 

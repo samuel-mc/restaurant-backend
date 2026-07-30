@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -23,4 +25,8 @@ public class OrderDetailRequest {
     /** Anotaciones del comensal para cocina (ej. sin cebolla). */
     @Size(max = 255, message = "Las notas no pueden superar 255 caracteres")
     private String notes;
+
+    /** UUIDs de opciones de modificador seleccionadas. */
+    @Builder.Default
+    private List<UUID> modifierUuids = new ArrayList<>();
 }

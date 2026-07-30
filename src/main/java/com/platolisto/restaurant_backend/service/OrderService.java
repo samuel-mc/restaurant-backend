@@ -2,22 +2,27 @@ package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.dto.ActiveSessionResponse;
 import com.platolisto.restaurant_backend.dto.AdminOrderListFilter;
+import com.platolisto.restaurant_backend.dto.OrderDetailModifierResponse;
 import com.platolisto.restaurant_backend.dto.OrderDetailRequest;
 import com.platolisto.restaurant_backend.dto.OrderDetailResponse;
 import com.platolisto.restaurant_backend.dto.OrderRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
 import com.platolisto.restaurant_backend.entity.Order;
 import com.platolisto.restaurant_backend.entity.OrderDetail;
+import com.platolisto.restaurant_backend.entity.OrderDetailModifier;
 import com.platolisto.restaurant_backend.entity.OrderItemStatus;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
 import com.platolisto.restaurant_backend.entity.OrderType;
 import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
+import com.platolisto.restaurant_backend.entity.ProductModifier;
+import com.platolisto.restaurant_backend.entity.ProductModifierGroup;
 import com.platolisto.restaurant_backend.entity.Restaurant;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import com.platolisto.restaurant_backend.multitenancy.TenantContext;
 import com.platolisto.restaurant_backend.plan.PlanLimits;
 import com.platolisto.restaurant_backend.repository.OrderRepository;
+import com.platolisto.restaurant_backend.repository.ProductModifierRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.security.OrderStatusAuthorization;
@@ -64,6 +69,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final ProductModifierRepository productModifierRepository;
     private final RestaurantRepository restaurantRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final TableQrTokenService tableQrTokenService;
@@ -211,6 +217,14 @@ public class OrderService {
             }
 
             BigDecimal unitPrice = product.getPrice();
+            List<ProductModifier> selectedModifiers = resolveSelectedModifiers(
+                    product,
+                    detailRequest.getModifierUuids()
+            );
+            for (ProductModifier modifier : selectedModifiers) {
+                unitPrice = unitPrice.add(modifier.getPriceDelta());
+            }
+
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(detailRequest.getQuantity()));
             added = added.add(subtotal);
 
@@ -223,9 +237,90 @@ public class OrderService {
                     .status(OrderItemStatus.PENDING)
                     .build();
 
+            for (ProductModifier modifier : selectedModifiers) {
+                detail.addModifier(OrderDetailModifier.builder()
+                        .modifierUuid(modifier.getUuid())
+                        .name(modifier.getName())
+                        .priceDelta(modifier.getPriceDelta())
+                        .build());
+            }
+
             order.addDetail(detail);
         }
         return added;
+    }
+
+    /**
+     * Valida selección de modificadores: UUIDs del producto, disponibles,
+     * y min/max por grupo.
+     */
+    private List<ProductModifier> resolveSelectedModifiers(Product product, List<UUID> requestedUuids) {
+        List<UUID> requested = requestedUuids == null
+                ? List.of()
+                : requestedUuids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+
+        List<ProductModifierGroup> groups = product.getModifierGroups() == null
+                ? List.of()
+                : product.getModifierGroups();
+
+        if (requested.isEmpty()) {
+            for (ProductModifierGroup group : groups) {
+                if (group.getMinSelect() > 0) {
+                    throw new IllegalArgumentException(
+                            "En \"" + product.getName() + "\" debes elegir "
+                                    + group.getMinSelect()
+                                    + " opción(es) de \"" + group.getName() + "\"."
+                    );
+                }
+            }
+            return List.of();
+        }
+
+        List<ProductModifier> found = productModifierRepository.findByUuidInWithGroup(requested);
+        if (found.size() != requested.size()) {
+            throw new IllegalArgumentException(
+                    "Una o más opciones de \"" + product.getName() + "\" no son válidas."
+            );
+        }
+
+        Map<Long, List<ProductModifier>> byGroup = new java.util.HashMap<>();
+        for (ProductModifier modifier : found) {
+            if (!modifier.getRestaurant().getId().equals(product.getRestaurant().getId())) {
+                throw new IllegalArgumentException(
+                        "Una o más opciones de \"" + product.getName() + "\" no son válidas."
+                );
+            }
+            if (modifier.getGroup() == null
+                    || modifier.getGroup().getProduct() == null
+                    || !modifier.getGroup().getProduct().getId().equals(product.getId())) {
+                throw new IllegalArgumentException(
+                        "La opción \"" + modifier.getName() + "\" no pertenece a "
+                                + product.getName() + "."
+                );
+            }
+            if (!modifier.isAvailable() || modifier.isDeleted()) {
+                throw new IllegalArgumentException(
+                        "La opción \"" + modifier.getName() + "\" no está disponible."
+                );
+            }
+            byGroup
+                    .computeIfAbsent(modifier.getGroup().getId(), ignored -> new ArrayList<>())
+                    .add(modifier);
+        }
+
+        for (ProductModifierGroup group : groups) {
+            int selected = byGroup.getOrDefault(group.getId(), List.of()).size();
+            if (selected < group.getMinSelect() || selected > group.getMaxSelect()) {
+                throw new IllegalArgumentException(
+                        "En \"" + product.getName() + "\" / \"" + group.getName()
+                                + "\" elige entre " + group.getMinSelect()
+                                + " y " + group.getMaxSelect() + " opción(es)."
+                );
+            }
+        }
+
+        // Rechazar UUIDs de grupos que ya no existen en el producto (cubierto arriba).
+        return found;
     }
 
     /**
@@ -605,6 +700,15 @@ public class OrderService {
                         .thenComparing(OrderDetail::getId, Comparator.nullsLast(Long::compareTo)))
                 .map(detail -> {
                     Product product = detail.getProduct();
+                    List<OrderDetailModifierResponse> modifiers = detail.getModifiers() == null
+                            ? List.of()
+                            : detail.getModifiers().stream()
+                            .map(mod -> OrderDetailModifierResponse.builder()
+                                    .modifierUuid(mod.getModifierUuid())
+                                    .name(mod.getName())
+                                    .priceDelta(mod.getPriceDelta())
+                                    .build())
+                            .collect(Collectors.toList());
                     return OrderDetailResponse.builder()
                             .id(detail.getId())
                             .productUuid(product != null ? product.getUuid() : null)
@@ -615,6 +719,7 @@ public class OrderService {
                             .notes(detail.getNotes())
                             .batchNumber(detail.getBatchNumber())
                             .status(detail.getStatus() != null ? detail.getStatus() : OrderItemStatus.PENDING)
+                            .modifiers(modifiers)
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -657,6 +762,7 @@ public class OrderService {
                         .notes(null)
                         .batchNumber(detail.getBatchNumber())
                         .status(detail.getStatus())
+                        .modifiers(detail.getModifiers() == null ? List.of() : detail.getModifiers())
                         .build())
                 .collect(Collectors.toList());
 

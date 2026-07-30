@@ -2,10 +2,13 @@ package com.platolisto.restaurant_backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.NotFound;
 import org.hibernate.annotations.NotFoundAction;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "order_details")
@@ -52,4 +55,14 @@ public class OrderDetail {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private OrderItemStatus status = OrderItemStatus.PENDING;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "orderDetail", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
+    private List<OrderDetailModifier> modifiers = new ArrayList<>();
+
+    public void addModifier(OrderDetailModifier modifier) {
+        modifiers.add(modifier);
+        modifier.setOrderDetail(this);
+    }
 }

@@ -4,6 +4,8 @@ import com.platolisto.restaurant_backend.entity.OrderItemStatus;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -21,4 +23,6 @@ public class OrderDetailResponse {
     private String notes;
     private int batchNumber;
     private OrderItemStatus status;
+    @Builder.Default
+    private List<OrderDetailModifierResponse> modifiers = new ArrayList<>();
 }

@@ -54,6 +54,7 @@ public class MenuService {
                         .categoryId(product.getCategory().getId())
                         .categoryName(product.getCategory().getName())
                         .createdAt(product.getCreatedAt())
+                        .modifierGroups(new java.util.ArrayList<>(ProductModifierService.mapGroups(product)))
                         .build())
                 .collect(Collectors.toList());
     }

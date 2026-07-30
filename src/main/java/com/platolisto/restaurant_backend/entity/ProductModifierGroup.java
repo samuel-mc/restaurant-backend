@@ -7,29 +7,21 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.hibernate.annotations.*;
-
 @Entity
-@Table(name = "products")
-@SQLDelete(sql = "UPDATE products SET deleted = true WHERE id = ?")
+@Table(name = "product_modifier_groups")
+@SQLDelete(sql = "UPDATE product_modifier_groups SET deleted = true WHERE id = ?")
 @SQLRestriction("deleted = false")
-@FilterDef(
-    name = "tenantFilter",
-    parameters = @ParamDef(name = "restaurantId", type = Long.class)
-)
-@Filter(name = "tenantFilter", condition = "restaurant_id = :restaurantId")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Product {
+public class ProductModifierGroup {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -44,24 +36,23 @@ public class Product {
     private Restaurant restaurant;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "category_id", nullable = false)
-    private Category category;
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product product;
 
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(columnDefinition = "TEXT")
-    private String description;
-
-    @Column(nullable = false, precision = 10, scale = 2)
-    private BigDecimal price;
-
-    @Column(name = "image_url")
-    private String imageUrl;
+    @Builder.Default
+    @Column(name = "min_select", nullable = false)
+    private int minSelect = 0;
 
     @Builder.Default
-    @Column(name = "is_available", nullable = false)
-    private boolean isAvailable = true;
+    @Column(name = "max_select", nullable = false)
+    private int maxSelect = 1;
+
+    @Builder.Default
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder = 0;
 
     @Builder.Default
     @Column(nullable = false)
@@ -72,13 +63,13 @@ public class Product {
     private OffsetDateTime createdAt;
 
     @Builder.Default
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "group", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC, id ASC")
     @BatchSize(size = 50)
-    private List<ProductModifierGroup> modifierGroups = new ArrayList<>();
+    private List<ProductModifier> options = new ArrayList<>();
 
-    public void addModifierGroup(ProductModifierGroup group) {
-        modifierGroups.add(group);
-        group.setProduct(this);
+    public void addOption(ProductModifier option) {
+        options.add(option);
+        option.setGroup(this);
     }
 }

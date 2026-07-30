@@ -4,6 +4,8 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -21,4 +23,6 @@ public class ProductResponse {
     private Long categoryId;
     private String categoryName;
     private OffsetDateTime createdAt;
+    @Builder.Default
+    private List<ProductModifierGroupResponse> modifierGroups = new ArrayList<>();
 }
