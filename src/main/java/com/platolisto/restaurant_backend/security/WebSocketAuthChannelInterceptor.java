@@ -32,6 +32,8 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
             Pattern.compile("^/topic/admin/([^/]+)/orders$");
     private static final Pattern ADMIN_FEEDBACK_TOPIC =
             Pattern.compile("^/topic/admin/([^/]+)/feedback$");
+    private static final Pattern ADMIN_TABLE_CALLS_TOPIC =
+            Pattern.compile("^/topic/admin/([^/]+)/table-calls$");
     private static final Pattern RESTAURANT_ID_TOPIC =
             Pattern.compile("^/topic/restaurants/(\\d+)/orders$");
     private static final Pattern ORDER_TRACKING_TOPIC =
@@ -126,6 +128,13 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
         Matcher feedbackMatcher = ADMIN_FEEDBACK_TOPIC.matcher(destination);
         if (feedbackMatcher.matches()) {
             requireAdminInboxAccess(accessor, resolveRestaurantIdBySlug(feedbackMatcher.group(1)));
+            return;
+        }
+
+        Matcher tableCallsMatcher = ADMIN_TABLE_CALLS_TOPIC.matcher(destination);
+        if (tableCallsMatcher.matches()) {
+            // Mesero / admin / cocina autenticados (mismo piso que cocina).
+            requireKitchenAccess(accessor, resolveRestaurantIdBySlug(tableCallsMatcher.group(1)));
             return;
         }
 
