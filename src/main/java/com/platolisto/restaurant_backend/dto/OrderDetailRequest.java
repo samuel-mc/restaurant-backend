@@ -29,4 +29,12 @@ public class OrderDetailRequest {
     /** UUIDs de opciones de modificador seleccionadas. */
     @Builder.Default
     private List<UUID> modifierUuids = new ArrayList<>();
+
+    /** Convenience for callers/tests without modifiers. */
+    public OrderDetailRequest(UUID productUuid, int quantity, String notes) {
+        this.productUuid = productUuid;
+        this.quantity = quantity;
+        this.notes = notes;
+        this.modifierUuids = new ArrayList<>();
+    }
 }
