@@ -1,6 +1,5 @@
 package com.platolisto.restaurant_backend.service;
 
-import com.platolisto.restaurant_backend.config.AllowedImageHosts;
 import com.platolisto.restaurant_backend.dto.ProductRequest;
 import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Category;
@@ -33,7 +32,6 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final RestaurantRepository restaurantRepository;
     private final ObjectStorageService objectStorageService;
-    private final AllowedImageHosts allowedImageHosts;
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
@@ -157,13 +155,7 @@ public class ProductService {
     }
 
     private String normalizeImageUrl(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        if (raw.isBlank()) {
-            return null;
-        }
-        return SafeHttpUrl.requireAllowedImageUrl(raw, allowedImageHosts.hostSuffixes());
+        return SafeHttpUrl.requireHttpsOrHttp(raw, "La URL de imagen");
     }
 
     private ProductResponse mapToResponse(Product product) {

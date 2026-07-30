@@ -22,6 +22,10 @@ public class OrderResponse {
     private String customerPhone;
     private OrderType orderType;
     private String tableNumber;
+    /** Mesas secundarias unidas a esta cuenta (números normalizados). */
+    private List<String> linkedTables;
+    private UUID staffId;
+    private String staffName;
     private String deliveryAddress;
     private OrderStatus status;
     private BigDecimal totalAmount;

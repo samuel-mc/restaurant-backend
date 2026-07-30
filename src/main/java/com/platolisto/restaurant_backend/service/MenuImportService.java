@@ -1,6 +1,5 @@
 package com.platolisto.restaurant_backend.service;
 
-import com.platolisto.restaurant_backend.config.AllowedImageHosts;
 import com.platolisto.restaurant_backend.dto.CategoryResponse;
 import com.platolisto.restaurant_backend.dto.MenuImportResultDTO;
 import com.platolisto.restaurant_backend.dto.MenuImportRowError;
@@ -62,7 +61,6 @@ public class MenuImportService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final RestaurantRepository restaurantRepository;
-    private final AllowedImageHosts allowedImageHosts;
 
     /**
      * Genera la plantilla .xlsx estilizada con una fila de ejemplo.
@@ -329,7 +327,7 @@ public class MenuImportService {
             );
         }
         try {
-            return SafeHttpUrl.requireAllowedImageUrl(url, allowedImageHosts.hostSuffixes());
+            return SafeHttpUrl.requireHttpsOrHttp(url, "Url_Imagen");
         } catch (IllegalArgumentException e) {
             throw new RowValidationException(e.getMessage());
         }

@@ -18,15 +18,18 @@ RUN mvn package -DskipTests -B
 FROM eclipse-temurin:21-jre-alpine AS runtime
 WORKDIR /app
 
-# Crear un usuario no root por seguridad
-RUN addgroup -S spring && adduser -S spring -G spring
-USER spring:spring
+# Usuario no root + su-exec para arreglar permisos del volumen de uploads al arrancar
+RUN addgroup -S spring && adduser -S spring -G spring \
+    && apk add --no-cache su-exec \
+    && mkdir -p /app/uploads \
+    && chown -R spring:spring /app/uploads
 
 # Copiar el archivo JAR compilado desde la etapa anterior
 COPY --from=build /app/target/*.jar app.jar
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Exponer el puerto por defecto
 EXPOSE 8080
 
-# Comando para ejecutar la aplicación con hilos virtuales activos por JVM si es necesario
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

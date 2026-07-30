@@ -47,6 +47,20 @@ public class Order {
     @Column(name = "table_number", length = 10)
     private String tableNumber;
 
+    /**
+     * Mesas secundarias vinculadas a esta cuenta (coma-separadas, p. ej. {@code 5,6}).
+     * La mesa canónica de cobro sigue siendo {@link #tableNumber}.
+     */
+    @Column(name = "linked_tables", length = 255)
+    private String linkedTables;
+
+    /** Mesero que tomó la comanda (login PIN); null si la abrió el comensal por QR. */
+    @Column(name = "staff_id")
+    private UUID staffId;
+
+    @Column(name = "staff_name", length = 100)
+    private String staffName;
+
     @Column(name = "delivery_address", columnDefinition = "TEXT")
     private String deliveryAddress;
 

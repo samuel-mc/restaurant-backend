@@ -7,6 +7,8 @@ import com.platolisto.restaurant_backend.dto.OrderDetailRequest;
 import com.platolisto.restaurant_backend.dto.OrderDetailResponse;
 import com.platolisto.restaurant_backend.dto.OrderRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
+import com.platolisto.restaurant_backend.dto.StaffOrderRequest;
+import com.platolisto.restaurant_backend.dto.TableMergeRequest;
 import com.platolisto.restaurant_backend.entity.Order;
 import com.platolisto.restaurant_backend.entity.OrderDetail;
 import com.platolisto.restaurant_backend.entity.OrderDetailModifier;
@@ -26,6 +28,7 @@ import com.platolisto.restaurant_backend.repository.ProductModifierRepository;
 import com.platolisto.restaurant_backend.repository.ProductRepository;
 import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 import com.platolisto.restaurant_backend.security.OrderStatusAuthorization;
+import com.platolisto.restaurant_backend.security.StaffUserDetails;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,17 +37,23 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -74,6 +83,8 @@ public class OrderService {
     private final SimpMessagingTemplate messagingTemplate;
     private final TableQrTokenService tableQrTokenService;
 
+    private static final Pattern MESA_PREFIX = Pattern.compile("(?i)^mesa\\s*");
+
     @Transactional
     public OrderResponse createOrder(OrderRequest request) {
         Long restaurantId = TenantContext.getCurrentTenant();
@@ -94,45 +105,280 @@ public class OrderService {
         validateDeliveryContact(request);
         validateTableAccess(restaurant, request);
 
+        // Si la mesa ya está unida a otra cuenta, no abrir una segunda orden.
+        if (request.getOrderType() == OrderType.IN_TABLE && request.getActiveOrderUuid() == null) {
+            String table = canonicalizeTable(request.getTableNumber());
+            Order covering = findOpenOrderCoveringTable(table, restaurantId);
+            if (covering != null) {
+                throw new IllegalArgumentException(
+                        "Esta mesa ya tiene una cuenta abierta"
+                                + (covering.getTableNumber() != null
+                                && !covering.getTableNumber().equalsIgnoreCase(table)
+                                ? " (unida a Mesa " + covering.getTableNumber() + ")"
+                                : "")
+                                + ". Usa la sesión activa o pide adición."
+                );
+            }
+        }
+
         Order openOrder = findOpenOrderForAddition(request, restaurantId);
         if (openOrder != null) {
             return stripPublicPii(appendRound(openOrder, request, restaurantId, restaurant));
         }
 
-        return stripPublicPii(createFreshOrder(request, restaurantId, restaurant));
+        return stripPublicPii(createFreshOrder(request, restaurantId, restaurant, null));
+    }
+
+    /**
+     * Comanda tomada por el mesero desde el panel: sin token QR.
+     * Atribuye staffId/staffName desde el JWT del equipo.
+     */
+    @Transactional
+    public OrderResponse createStaffOrder(StaffOrderRequest request) {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+
+        if (!restaurant.isOrderingEnabled()) {
+            throw new IllegalArgumentException(
+                    "Este restaurante no acepta pedidos. Activa el módulo de pedidos en configuración."
+            );
+        }
+
+        String table = canonicalizeTable(request.getTableNumber());
+        if (table == null) {
+            throw new IllegalArgumentException("El número de mesa es requerido.");
+        }
+
+        StaffUserDetails staff = currentStaffOrNull();
+        String customerName = request.getCustomerName() == null || request.getCustomerName().isBlank()
+                ? "Mesa " + table
+                : request.getCustomerName().trim();
+
+        OrderRequest asPublic = OrderRequest.builder()
+                .customerName(customerName)
+                .orderType(OrderType.IN_TABLE)
+                .tableNumber(table)
+                .activeOrderUuid(request.getActiveOrderUuid())
+                .details(request.getDetails())
+                .build();
+
+        Order openOrder = findOpenOrderForAddition(asPublic, restaurantId);
+        if (openOrder == null && request.getActiveOrderUuid() == null) {
+            openOrder = findOpenOrderCoveringTable(table, restaurantId);
+        }
+
+        if (openOrder != null) {
+            if (staff != null) {
+                openOrder.setStaffId(staff.getStaffId());
+                openOrder.setStaffName(staff.getName());
+            }
+            return appendRound(openOrder, asPublic, restaurantId, restaurant);
+        }
+        return createFreshOrder(asPublic, restaurantId, restaurant, staff);
+    }
+
+    @Transactional
+    public OrderResponse mergeTables(TableMergeRequest request) {
+        Long restaurantId = TenantContext.getCurrentTenant();
+        if (restaurantId == null) {
+            throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+
+        Restaurant restaurant = restaurantRepository.findById(restaurantId)
+                .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+
+        String primary = canonicalizeTable(request.getPrimaryTable());
+        if (primary == null) {
+            throw new IllegalArgumentException("La mesa principal es requerida.");
+        }
+
+        LinkedHashSet<String> secondaries = new LinkedHashSet<>();
+        for (String raw : request.getSecondaryTables()) {
+            String table = canonicalizeTable(raw);
+            if (table == null) {
+                continue;
+            }
+            if (table.equalsIgnoreCase(primary)) {
+                throw new IllegalArgumentException("No puedes vincular la mesa principal consigo misma.");
+            }
+            secondaries.add(table);
+        }
+        if (secondaries.isEmpty()) {
+            throw new IllegalArgumentException("Debes indicar al menos una mesa secundaria distinta.");
+        }
+
+        for (String secondary : secondaries) {
+            Order covering = findOpenOrderCoveringTable(secondary, restaurantId);
+            if (covering != null) {
+                String coveringPrimary = canonicalizeTable(covering.getTableNumber());
+                if (coveringPrimary != null
+                        && !coveringPrimary.equalsIgnoreCase(primary)
+                        && !secondaries.contains(coveringPrimary)) {
+                    throw new IllegalArgumentException(
+                            "La Mesa " + secondary + " ya está unida a Mesa " + coveringPrimary + "."
+                    );
+                }
+            }
+        }
+
+        Order primaryOrder = findOpenOrderCoveringTable(primary, restaurantId);
+        List<Order> secondaryOrders = new ArrayList<>();
+        Set<Long> seenSecondaryOrderIds = new LinkedHashSet<>();
+        for (String secondary : secondaries) {
+            Order so = findOpenOrderCoveringTable(secondary, restaurantId);
+            if (so != null
+                    && (primaryOrder == null || !so.getId().equals(primaryOrder.getId()))
+                    && seenSecondaryOrderIds.add(so.getId())) {
+                secondaryOrders.add(so);
+            }
+        }
+
+        if (primaryOrder == null && secondaryOrders.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Ninguna de las mesas tiene cuenta abierta. Abre primero un pedido en la mesa principal."
+            );
+        }
+
+        if (primaryOrder == null) {
+            primaryOrder = secondaryOrders.removeFirst();
+            LinkedHashSet<String> inherited = new LinkedHashSet<>(parseLinkedTables(primaryOrder.getLinkedTables()));
+            String oldPrimary = canonicalizeTable(primaryOrder.getTableNumber());
+            if (oldPrimary != null && !oldPrimary.equalsIgnoreCase(primary)) {
+                inherited.add(oldPrimary);
+            }
+            primaryOrder.setTableNumber(primary);
+            primaryOrder.setLinkedTables(encodeLinkedTables(inherited));
+        }
+
+        for (Order secondaryOrder : secondaryOrders) {
+            if (secondaryOrder.getId().equals(primaryOrder.getId())) {
+                continue;
+            }
+            absorbOrderDetails(primaryOrder, secondaryOrder);
+            LinkedHashSet<String> absorbedLinks = new LinkedHashSet<>(parseLinkedTables(secondaryOrder.getLinkedTables()));
+            String secTable = canonicalizeTable(secondaryOrder.getTableNumber());
+            if (secTable != null) {
+                absorbedLinks.add(secTable);
+            }
+            LinkedHashSet<String> merged = new LinkedHashSet<>(parseLinkedTables(primaryOrder.getLinkedTables()));
+            merged.addAll(absorbedLinks);
+            merged.removeIf(t -> t.equalsIgnoreCase(primary));
+            primaryOrder.setLinkedTables(encodeLinkedTables(merged));
+
+            secondaryOrder.setStatus(OrderStatus.CLOSED);
+            secondaryOrder.setLinkedTables(null);
+            for (OrderDetail detail : secondaryOrder.getDetails()) {
+                if (detail.getStatus() != OrderItemStatus.DELIVERED) {
+                    detail.setStatus(OrderItemStatus.DELIVERED);
+                }
+            }
+            orderRepository.save(secondaryOrder);
+            publishOrderEvents(restaurant, mapToResponse(secondaryOrder));
+        }
+
+        LinkedHashSet<String> links = new LinkedHashSet<>(parseLinkedTables(primaryOrder.getLinkedTables()));
+        links.addAll(secondaries);
+        links.removeIf(t -> t.equalsIgnoreCase(primary));
+        primaryOrder.setLinkedTables(encodeLinkedTables(links));
+        primaryOrder.setTableNumber(primary);
+
+        Order saved = orderRepository.save(primaryOrder);
+        log.info(
+                "Mesas unidas: primaria={}, vinculadas={}, orden={}",
+                primary,
+                saved.getLinkedTables(),
+                saved.getUuid()
+        );
+
+        OrderResponse response = mapToResponse(saved);
+        publishOrderEvents(restaurant, response);
+        return response;
     }
 
     private OrderResponse createFreshOrder(
             OrderRequest request,
             Long restaurantId,
-            Restaurant restaurant
+            Restaurant restaurant,
+            StaffUserDetails staff
     ) {
-        Order order = Order.builder()
+        Order.OrderBuilder builder = Order.builder()
                 .restaurant(restaurant)
                 .customerName(request.getCustomerName())
                 .customerPhone(request.getCustomerPhone())
                 .orderType(request.getOrderType())
-                .tableNumber(normalizeTable(request.getTableNumber()))
+                .tableNumber(canonicalizeTable(request.getTableNumber()))
                 .deliveryAddress(request.getDeliveryAddress())
                 .status(OrderStatus.PENDING)
                 .totalAmount(BigDecimal.ZERO)
-                .details(new ArrayList<>())
-                .build();
+                .details(new ArrayList<>());
+        if (staff != null) {
+            builder.staffId(staff.getStaffId()).staffName(staff.getName());
+        }
+        Order order = builder.build();
 
         BigDecimal calculatedTotal = addDetailsToOrder(order, request.getDetails(), restaurantId, 1);
         order.setTotalAmount(calculatedTotal);
 
         Order savedOrder = orderRepository.save(order);
         log.info(
-                "Pedido creado: UUID={}, mesa={}, total={}",
+                "Pedido creado: UUID={}, mesa={}, staff={}, total={}",
                 savedOrder.getUuid(),
                 savedOrder.getTableNumber(),
+                savedOrder.getStaffName(),
                 savedOrder.getTotalAmount()
         );
 
         OrderResponse response = mapToResponse(savedOrder);
         publishOrderEvents(restaurant, response);
         return response;
+    }
+
+    /** Copia líneas de {@code source} a {@code target} (no mueve entidades: orphanRemoval). */
+    private void absorbOrderDetails(Order target, Order source) {
+        int nextBatch = target.getDetails().stream()
+                .mapToInt(OrderDetail::getBatchNumber)
+                .max()
+                .orElse(0) + 1;
+        int sourceMinBatch = source.getDetails().stream()
+                .mapToInt(OrderDetail::getBatchNumber)
+                .min()
+                .orElse(1);
+        int batchOffset = nextBatch - sourceMinBatch;
+
+        for (OrderDetail detail : List.copyOf(source.getDetails())) {
+            OrderDetail copy = OrderDetail.builder()
+                    .product(detail.getProduct())
+                    .quantity(detail.getQuantity())
+                    .unitPrice(detail.getUnitPrice())
+                    .notes(detail.getNotes())
+                    .batchNumber(detail.getBatchNumber() + Math.max(0, batchOffset))
+                    .status(detail.getStatus() != null ? detail.getStatus() : OrderItemStatus.PENDING)
+                    .build();
+            if (detail.getModifiers() != null) {
+                for (OrderDetailModifier mod : detail.getModifiers()) {
+                    copy.addModifier(OrderDetailModifier.builder()
+                            .modifierUuid(mod.getModifierUuid())
+                            .name(mod.getName())
+                            .priceDelta(mod.getPriceDelta())
+                            .build());
+                }
+            }
+            target.addDetail(copy);
+        }
+        target.setTotalAmount(target.getTotalAmount().add(
+                source.getTotalAmount() != null ? source.getTotalAmount() : BigDecimal.ZERO
+        ));
+
+        if (target.getStatus() == OrderStatus.ACCEPTED
+                || target.getStatus() == OrderStatus.IN_KITCHEN
+                || target.getStatus() == OrderStatus.DELIVERED) {
+            target.setStatus(OrderStatus.PENDING);
+        }
     }
 
     private OrderResponse appendRound(
@@ -324,7 +570,8 @@ public class OrderService {
     }
 
     /**
-     * Busca orden abierta solo por UUID de sesión (nunca solo por número de mesa).
+     * Busca orden abierta por UUID de sesión.
+     * Acepta la mesa primaria o cualquiera de las mesas vinculadas.
      */
     private Order findOpenOrderForAddition(OrderRequest request, Long restaurantId) {
         if (request.getActiveOrderUuid() == null) {
@@ -337,10 +584,8 @@ public class OrderService {
                 || !OPEN_STATUSES.contains(byUuid.getStatus())) {
             return null;
         }
-        // El UUID de tracking no autoriza: debe coincidir la mesa ya validada por QR.
-        String requestTable = normalizeTable(request.getTableNumber());
-        String orderTable = normalizeTable(byUuid.getTableNumber());
-        if (requestTable == null || orderTable == null || !requestTable.equals(orderTable)) {
+        String requestTable = canonicalizeTable(request.getTableNumber());
+        if (requestTable == null || !orderCoversTable(byUuid, requestTable)) {
             throw new IllegalArgumentException(
                     "El pedido activo no corresponde a esta mesa. Escanea el código QR de tu mesa."
             );
@@ -352,16 +597,28 @@ public class OrderService {
         if (request.getOrderType() != OrderType.IN_TABLE) {
             return;
         }
-        // Siempre exigir token QR (también al añadir rondas): el UUID público no es capability.
-        String table = normalizeTable(request.getTableNumber());
+        String table = canonicalizeTable(request.getTableNumber());
         if (table == null) {
             throw new IllegalArgumentException("El número de mesa es requerido.");
         }
+        // El token debe ser el de la mesa escaneada (primaria o vinculada).
         tableQrTokenService.requireValid(restaurant, table, request.getTableToken());
     }
 
+    /**
+     * Normaliza etiquetas tipo {@code "Mesa 4"} / {@code "4"} al número canónico de mesa.
+     */
+    static String canonicalizeTable(String tableNumber) {
+        String normalized = TableQrTokenService.normalizeTable(tableNumber);
+        if (normalized == null) {
+            return null;
+        }
+        String withoutPrefix = MESA_PREFIX.matcher(normalized).replaceFirst("").trim();
+        return withoutPrefix.isEmpty() ? null : withoutPrefix;
+    }
+
     private static String normalizeTable(String tableNumber) {
-        return TableQrTokenService.normalizeTable(tableNumber);
+        return canonicalizeTable(tableNumber);
     }
 
     @Transactional(readOnly = true)
@@ -371,7 +628,7 @@ public class OrderService {
             throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
         }
 
-        String table = normalizeTable(tableNumber);
+        String table = canonicalizeTable(tableNumber);
         if (table == null) {
             return ActiveSessionResponse.builder().hasActiveOrder(false).build();
         }
@@ -384,13 +641,9 @@ public class OrderService {
             return ActiveSessionResponse.builder().hasActiveOrder(false).build();
         }
 
-        Order open = orderRepository
-                .findOpenInTableWithDetails(table, OrderType.IN_TABLE, OPEN_STATUSES)
-                .stream()
-                .max(Comparator.comparing(Order::getCreatedAt))
-                .orElse(null);
+        Order open = findOpenOrderCoveringTable(table, restaurantId);
 
-        if (open == null || !open.getRestaurant().getId().equals(restaurantId)) {
+        if (open == null) {
             return ActiveSessionResponse.builder().hasActiveOrder(false).build();
         }
 
@@ -424,6 +677,8 @@ public class OrderService {
         OrderStatusAuthorization.assertCanCloseOrder();
 
         order.setStatus(OrderStatus.CLOSED);
+        // Al cobrar: desvincula mesas (quedan libres de forma independiente).
+        order.setLinkedTables(null);
         for (OrderDetail detail : order.getDetails()) {
             if (detail.getStatus() != OrderItemStatus.DELIVERED) {
                 detail.setStatus(OrderItemStatus.DELIVERED);
@@ -731,6 +986,9 @@ public class OrderService {
                 .customerPhone(order.getCustomerPhone())
                 .orderType(order.getOrderType())
                 .tableNumber(order.getTableNumber())
+                .linkedTables(parseLinkedTables(order.getLinkedTables()))
+                .staffId(order.getStaffId())
+                .staffName(order.getStaffName())
                 .deliveryAddress(order.getDeliveryAddress())
                 .status(order.getStatus())
                 .totalAmount(order.getTotalAmount())
@@ -773,6 +1031,9 @@ public class OrderService {
                 .customerPhone(null)
                 .orderType(response.getOrderType())
                 .tableNumber(response.getTableNumber())
+                .linkedTables(response.getLinkedTables() == null ? List.of() : response.getLinkedTables())
+                .staffId(null)
+                .staffName(null)
                 .deliveryAddress(null)
                 .status(response.getStatus())
                 .totalAmount(response.getTotalAmount())
@@ -780,5 +1041,68 @@ public class OrderService {
                 .updatedAt(response.getUpdatedAt())
                 .details(publicDetails)
                 .build();
+    }
+
+    /** Orden abierta cuya mesa primaria o vinculada cubre {@code table}. */
+    private Order findOpenOrderCoveringTable(String table, Long restaurantId) {
+        if (table == null) {
+            return null;
+        }
+        return orderRepository
+                .findOpenInTableOrdersWithDetails(OrderType.IN_TABLE, OPEN_STATUSES)
+                .stream()
+                .filter(o -> o.getRestaurant() != null && o.getRestaurant().getId().equals(restaurantId))
+                .filter(o -> orderCoversTable(o, table))
+                .max(Comparator.comparing(Order::getCreatedAt))
+                .orElse(null);
+    }
+
+    private static boolean orderCoversTable(Order order, String table) {
+        if (order == null || table == null) {
+            return false;
+        }
+        String primary = canonicalizeTable(order.getTableNumber());
+        if (primary != null && primary.equalsIgnoreCase(table)) {
+            return true;
+        }
+        return parseLinkedTables(order.getLinkedTables()).stream()
+                .anyMatch(t -> t.equalsIgnoreCase(table));
+    }
+
+    static List<String> parseLinkedTables(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(OrderService::canonicalizeTable)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    static String encodeLinkedTables(Set<String> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return null;
+        }
+        String encoded = tables.stream()
+                .map(OrderService::canonicalizeTable)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.joining(","));
+        return encoded.isEmpty() ? null : encoded;
+    }
+
+    private static StaffUserDetails currentStaffOrNull() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return null;
+        }
+        Object principal = auth.getPrincipal();
+        if (principal instanceof StaffUserDetails staff) {
+            return staff;
+        }
+        return null;
     }
 }

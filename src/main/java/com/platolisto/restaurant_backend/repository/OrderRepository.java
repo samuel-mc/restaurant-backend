@@ -33,7 +33,7 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
 
     /**
      * Órdenes abiertas de una mesa (IN_TABLE) para fusionar adiciones en el mismo ticket.
-     * "Abierta" = PENDING | ACCEPTED | IN_KITCHEN (equivalente a OPEN del dominio).
+     * "Abierta" = PENDING | ACCEPTED | IN_KITCHEN | DELIVERED (OPEN_STATUSES).
      */
     @Query("""
             SELECT DISTINCT o FROM Order o
@@ -45,6 +45,21 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
             """)
     List<Order> findOpenInTableWithDetails(
             @Param("tableNumber") String tableNumber,
+            @Param("orderType") OrderType orderType,
+            @Param("statuses") Collection<OrderStatus> statuses
+    );
+
+    /**
+     * Todas las órdenes IN_TABLE abiertas (para resolver mesas vinculadas en memoria).
+     */
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            LEFT JOIN FETCH o.details d
+            LEFT JOIN FETCH d.product
+            WHERE o.orderType = :orderType
+              AND o.status IN :statuses
+            """)
+    List<Order> findOpenInTableOrdersWithDetails(
             @Param("orderType") OrderType orderType,
             @Param("statuses") Collection<OrderStatus> statuses
     );

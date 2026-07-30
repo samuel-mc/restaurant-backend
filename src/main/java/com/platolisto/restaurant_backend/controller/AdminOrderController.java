@@ -4,6 +4,7 @@ import com.platolisto.restaurant_backend.dto.AdminOrderListFilter;
 import com.platolisto.restaurant_backend.dto.OrderStatusRequest;
 import com.platolisto.restaurant_backend.dto.OrderItemStatusRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
+import com.platolisto.restaurant_backend.dto.StaffOrderRequest;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
 import com.platolisto.restaurant_backend.entity.OrderType;
 import com.platolisto.restaurant_backend.service.OrderService;
@@ -13,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +52,16 @@ public class AdminOrderController {
     @GetMapping("/active")
     public ResponseEntity<List<OrderResponse>> getActiveOrders() {
         return ResponseEntity.ok(orderService.getActiveOrders());
+    }
+
+    /**
+     * Comanda manual del mesero (abre mesa o adición) sin token QR.
+     * Registra {@code staffId}/{@code staffName} desde el JWT del equipo.
+     */
+    @PostMapping
+    @PreAuthorize("hasAnyRole('MESERO', 'ADMIN', 'OWNER')")
+    public ResponseEntity<OrderResponse> createStaffOrder(@Valid @RequestBody StaffOrderRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(orderService.createStaffOrder(request));
     }
 
     @PatchMapping("/{uuid}/status")
