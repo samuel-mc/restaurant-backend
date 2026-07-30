@@ -65,6 +65,7 @@ public class TenantRegistrationService {
                 .hasPickup(false)
                 .hasReservations(false)
                 .orderingEnabled(false)
+                .tableCount(RestaurantProfileService.DEFAULT_TABLE_COUNT)
                 .build());
 
         boolean couponApplied = couponService.applyCouponAtRegistration(

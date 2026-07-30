@@ -25,6 +25,9 @@ import java.util.regex.Pattern;
 public class RestaurantProfileService {
 
     private static final Pattern HEX_COLOR = Pattern.compile("^#[0-9A-Fa-f]{6}$");
+    public static final int MIN_TABLE_COUNT = 1;
+    public static final int MAX_TABLE_COUNT = 99;
+    public static final int DEFAULT_TABLE_COUNT = 12;
 
     private final RestaurantRepository restaurantRepository;
     private final ObjectStorageService objectStorageService;
@@ -83,6 +86,9 @@ public class RestaurantProfileService {
         }
         if (request.getOrderingEnabled() != null) {
             restaurant.setOrderingEnabled(request.getOrderingEnabled());
+        }
+        if (request.getTableCount() != null) {
+            restaurant.setTableCount(normalizeTableCount(request.getTableCount()));
         }
 
         SubscriptionPlan plan = restaurant.getPlan() != null
@@ -185,6 +191,7 @@ public class RestaurantProfileService {
                 .hasPickup(proModulesAllowed && restaurant.isHasPickup())
                 .hasReservations(proModulesAllowed && restaurant.isHasReservations())
                 .orderingEnabled(restaurant.isOrderingEnabled())
+                .tableCount(normalizeStoredTableCount(restaurant.getTableCount()))
                 .websitePublished(restaurant.isWebsitePublished())
                 .updatedAt(restaurant.getUpdatedAt());
 
@@ -193,5 +200,25 @@ public class RestaurantProfileService {
         }
 
         return builder.build();
+    }
+
+    public static int normalizeTableCount(int tableCount) {
+        if (tableCount < MIN_TABLE_COUNT || tableCount > MAX_TABLE_COUNT) {
+            throw new IllegalArgumentException(
+                    "El total de mesas debe estar entre "
+                            + MIN_TABLE_COUNT + " y " + MAX_TABLE_COUNT + "."
+            );
+        }
+        return tableCount;
+    }
+
+    public static int normalizeStoredTableCount(int tableCount) {
+        if (tableCount < MIN_TABLE_COUNT) {
+            return DEFAULT_TABLE_COUNT;
+        }
+        if (tableCount > MAX_TABLE_COUNT) {
+            return MAX_TABLE_COUNT;
+        }
+        return tableCount;
     }
 }

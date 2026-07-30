@@ -26,6 +26,8 @@ public class RestaurantProfileResponse {
     private boolean hasPickup;
     private boolean hasReservations;
     private boolean orderingEnabled;
+    /** Total de mesas del salón configuradas para el piso. */
+    private int tableCount;
     private boolean websitePublished;
     private String plan;
     private String paymentStatus;

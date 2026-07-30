@@ -37,5 +37,7 @@ public class RestaurantProfileRequest {
     private Boolean hasPickup;
     private Boolean hasReservations;
     private Boolean orderingEnabled;
+    /** Total de mesas del salón (1–99). */
+    private Integer tableCount;
     private Boolean websitePublished;
 }

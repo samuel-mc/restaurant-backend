@@ -76,6 +76,14 @@ public class Restaurant {
     @Column(name = "ordering_enabled", nullable = false)
     private boolean orderingEnabled = false;
 
+    /**
+     * Cantidad de mesas del salón (piso operativo del mesero / QR).
+     * Rango típico 1–99; se configura en settings.
+     */
+    @Builder.Default
+    @Column(name = "table_count", nullable = false)
+    private int tableCount = 12;
+
     /** Si el website institucional del tenant está visible al público. */
     @Builder.Default
     @Column(name = "website_published", nullable = false)

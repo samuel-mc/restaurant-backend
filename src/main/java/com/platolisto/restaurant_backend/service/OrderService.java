@@ -153,6 +153,7 @@ public class OrderService {
         if (table == null) {
             throw new IllegalArgumentException("El número de mesa es requerido.");
         }
+        assertTableInFloor(restaurant, table);
 
         StaffUserDetails staff = currentStaffOrNull();
         String customerName = request.getCustomerName() == null || request.getCustomerName().isBlank()
@@ -196,6 +197,7 @@ public class OrderService {
         if (primary == null) {
             throw new IllegalArgumentException("La mesa principal es requerida.");
         }
+        assertTableInFloor(restaurant, primary);
 
         LinkedHashSet<String> secondaries = new LinkedHashSet<>();
         for (String raw : request.getSecondaryTables()) {
@@ -206,6 +208,7 @@ public class OrderService {
             if (table.equalsIgnoreCase(primary)) {
                 throw new IllegalArgumentException("No puedes vincular la mesa principal consigo misma.");
             }
+            assertTableInFloor(restaurant, table);
             secondaries.add(table);
         }
         if (secondaries.isEmpty()) {
@@ -1104,5 +1107,24 @@ public class OrderService {
             return staff;
         }
         return null;
+    }
+
+    /** Si la mesa es numérica, debe estar dentro del {@code tableCount} del restaurante. */
+    private static void assertTableInFloor(Restaurant restaurant, String table) {
+        if (table == null || !table.chars().allMatch(Character::isDigit)) {
+            return;
+        }
+        int number;
+        try {
+            number = Integer.parseInt(table);
+        } catch (NumberFormatException ex) {
+            return;
+        }
+        int max = RestaurantProfileService.normalizeStoredTableCount(restaurant.getTableCount());
+        if (number < 1 || number > max) {
+            throw new IllegalArgumentException(
+                    "La Mesa " + table + " está fuera del piso configurado (1–" + max + ")."
+            );
+        }
     }
 }

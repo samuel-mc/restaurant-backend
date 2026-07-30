@@ -48,6 +48,7 @@ public class RestaurantProfileController {
             @RequestParam(value = "hasPickup", required = false) Boolean hasPickup,
             @RequestParam(value = "hasReservations", required = false) Boolean hasReservations,
             @RequestParam(value = "orderingEnabled", required = false) Boolean orderingEnabled,
+            @RequestParam(value = "tableCount", required = false) Integer tableCount,
             @RequestParam(value = "websitePublished", required = false) Boolean websitePublished,
             @RequestParam(value = "logo", required = false) MultipartFile logo,
             @RequestParam(value = "banner", required = false) MultipartFile banner
@@ -65,6 +66,7 @@ public class RestaurantProfileController {
                 .hasPickup(hasPickup)
                 .hasReservations(hasReservations)
                 .orderingEnabled(orderingEnabled)
+                .tableCount(tableCount)
                 .websitePublished(websitePublished)
                 .build();
 
