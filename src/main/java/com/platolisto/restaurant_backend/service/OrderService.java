@@ -15,6 +15,7 @@ import com.platolisto.restaurant_backend.entity.OrderDetailModifier;
 import com.platolisto.restaurant_backend.entity.OrderItemStatus;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
 import com.platolisto.restaurant_backend.entity.OrderType;
+import com.platolisto.restaurant_backend.entity.PaymentMethod;
 import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.ProductModifier;
@@ -657,10 +658,15 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse closeOrder(UUID uuid) {
+    public OrderResponse closeOrder(UUID uuid, PaymentMethod paymentMethod) {
         Long restaurantId = TenantContext.getCurrentTenant();
         if (restaurantId == null) {
             throw new IllegalStateException("No se pudo identificar el restaurante en el contexto actual.");
+        }
+        if (paymentMethod == null) {
+            throw new IllegalArgumentException(
+                    "Indica el método de pago (CASH, CARD o TRANSFER)."
+            );
         }
 
         Order order = orderRepository.findByUuidWithDetails(uuid)
@@ -680,6 +686,7 @@ public class OrderService {
         OrderStatusAuthorization.assertCanCloseOrder();
 
         order.setStatus(OrderStatus.CLOSED);
+        order.setPaymentMethod(paymentMethod);
         // Al cobrar: desvincula mesas (quedan libres de forma independiente).
         order.setLinkedTables(null);
         for (OrderDetail detail : order.getDetails()) {
@@ -689,7 +696,12 @@ public class OrderService {
         }
 
         Order saved = orderRepository.save(order);
-        log.info("Cuenta cerrada (CLOSED): UUID={}, mesa={}", saved.getUuid(), saved.getTableNumber());
+        log.info(
+                "Cuenta cerrada (CLOSED): UUID={}, mesa={}, pago={}",
+                saved.getUuid(),
+                saved.getTableNumber(),
+                saved.getPaymentMethod()
+        );
 
         OrderResponse response = mapToResponse(saved);
         publishOrderEvents(saved.getRestaurant(), response);
@@ -994,6 +1006,7 @@ public class OrderService {
                 .staffName(order.getStaffName())
                 .deliveryAddress(order.getDeliveryAddress())
                 .status(order.getStatus())
+                .paymentMethod(order.getPaymentMethod())
                 .totalAmount(order.getTotalAmount())
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt())

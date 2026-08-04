@@ -424,9 +424,12 @@ public class E2eLoopIntegrationTest {
         // 1. Cierre de Mesa 2 por el Mesero
         mockMvc.perform(patch("/api/v1/admin/orders/" + orderUuid2 + "/close")
                         .header("X-Tenant", slug)
-                        .header("Authorization", "Bearer " + waiterToken))
+                        .header("Authorization", "Bearer " + waiterToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentMethod\":\"CASH\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CLOSED"));
+                .andExpect(jsonPath("$.status").value("CLOSED"))
+                .andExpect(jsonPath("$.paymentMethod").value("CASH"));
 
         // 2. Comensal de Mesa 2 envía Smart Rating 5 Estrellas
         SubmitFeedbackRequest feedbackReq = SubmitFeedbackRequest.builder()

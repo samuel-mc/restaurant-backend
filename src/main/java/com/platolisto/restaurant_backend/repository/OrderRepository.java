@@ -126,4 +126,22 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
             @Param("to") OffsetDateTime to,
             Pageable pageable
     );
+
+    /**
+     * Suma de ventas de órdenes CLOSED agrupadas por método de pago
+     * ({@code payment_method} puede ser null en históricos).
+     */
+    @Query("""
+            SELECT o.paymentMethod, COALESCE(SUM(o.totalAmount), 0)
+            FROM Order o
+            WHERE o.status = :closed
+              AND o.createdAt >= :from
+              AND o.createdAt < :to
+            GROUP BY o.paymentMethod
+            """)
+    List<Object[]> sumClosedSalesByPaymentMethod(
+            @Param("closed") OrderStatus closed,
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to
+    );
 }

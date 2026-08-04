@@ -2,6 +2,7 @@ package com.platolisto.restaurant_backend.dto;
 
 import com.platolisto.restaurant_backend.entity.OrderStatus;
 import com.platolisto.restaurant_backend.entity.OrderType;
+import com.platolisto.restaurant_backend.entity.PaymentMethod;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -28,6 +29,8 @@ public class OrderResponse {
     private String staffName;
     private String deliveryAddress;
     private OrderStatus status;
+    /** Método de cobro al cerrar; null si la cuenta sigue abierta. */
+    private PaymentMethod paymentMethod;
     private BigDecimal totalAmount;
     private OffsetDateTime createdAt;
     private OffsetDateTime updatedAt;

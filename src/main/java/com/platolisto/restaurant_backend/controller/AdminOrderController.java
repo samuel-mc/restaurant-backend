@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.controller;
 
 import com.platolisto.restaurant_backend.dto.AdminOrderListFilter;
+import com.platolisto.restaurant_backend.dto.CloseOrderRequest;
 import com.platolisto.restaurant_backend.dto.OrderStatusRequest;
 import com.platolisto.restaurant_backend.dto.OrderItemStatusRequest;
 import com.platolisto.restaurant_backend.dto.OrderResponse;
@@ -73,10 +74,15 @@ public class AdminOrderController {
         return ResponseEntity.ok(response);
     }
 
-    /** Cierra y cobra la cuenta (libera la mesa). */
+    /** Cierra y cobra la cuenta (libera la mesa). Requiere método de pago. */
     @PatchMapping("/{uuid}/close")
-    public ResponseEntity<OrderResponse> closeOrder(@PathVariable UUID uuid) {
-        return ResponseEntity.ok(orderService.closeOrder(uuid));
+    public ResponseEntity<OrderResponse> closeOrder(
+            @PathVariable UUID uuid,
+            @Valid @RequestBody CloseOrderRequest request
+    ) {
+        return ResponseEntity.ok(
+                orderService.closeOrder(uuid, request.getPaymentMethod())
+        );
     }
 
     /** Actualiza el estado de un ítem individual (p. ej. marcar un platillo como entregado). */

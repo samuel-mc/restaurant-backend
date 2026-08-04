@@ -2,6 +2,7 @@ package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.dto.AnalyticsSummaryResponse;
 import com.platolisto.restaurant_backend.entity.OrderStatus;
+import com.platolisto.restaurant_backend.entity.PaymentMethod;
 import com.platolisto.restaurant_backend.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -52,19 +53,7 @@ public class AnalyticsService {
                 ? BigDecimal.valueOf(avgRatingRaw).setScale(1, RoundingMode.HALF_UP).doubleValue()
                 : 5.0;
 
-        Map<String, BigDecimal> paymentMethods = new HashMap<>();
-        if (totalSales.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal cash = totalSales.multiply(new BigDecimal("0.60")).setScale(2, RoundingMode.HALF_UP);
-            BigDecimal card = totalSales.multiply(new BigDecimal("0.35")).setScale(2, RoundingMode.HALF_UP);
-            BigDecimal transfer = totalSales.subtract(cash).subtract(card).setScale(2, RoundingMode.HALF_UP);
-            paymentMethods.put("EFECTIVO", cash);
-            paymentMethods.put("TARJETA", card);
-            paymentMethods.put("TRANSFERENCIA", transfer);
-        } else {
-            paymentMethods.put("EFECTIVO", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            paymentMethods.put("TARJETA", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            paymentMethods.put("TRANSFERENCIA", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        }
+        Map<String, BigDecimal> paymentMethods = sumPaymentMethods(startOfDay, now);
 
         List<AnalyticsSummaryResponse.TopProduct> topProducts = new ArrayList<>();
         for (Object[] row : orderRepository.findTopProductsByRevenue(
@@ -89,6 +78,50 @@ public class AnalyticsService {
                 .topProducts(topProducts)
                 .date(now.toLocalDate().toString())
                 .build();
+    }
+
+    /**
+     * Desglose real por método de cobro (órdenes CLOSED del día).
+     * Claves en español para el panel / Corte Z: EFECTIVO, TARJETA, TRANSFERENCIA.
+     * Órdenes históricas sin método → SIN_REGISTRAR.
+     */
+    private Map<String, BigDecimal> sumPaymentMethods(OffsetDateTime from, OffsetDateTime to) {
+        Map<String, BigDecimal> paymentMethods = new HashMap<>();
+        paymentMethods.put("EFECTIVO", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        paymentMethods.put("TARJETA", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        paymentMethods.put("TRANSFERENCIA", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+
+        for (Object[] row : orderRepository.sumClosedSalesByPaymentMethod(
+                OrderStatus.CLOSED, from, to
+        )) {
+            PaymentMethod method = row[0] instanceof PaymentMethod pm ? pm : null;
+            BigDecimal amount = toBigDecimal(row[1]);
+            String key = analyticsPaymentKey(method);
+            paymentMethods.merge(key, amount, BigDecimal::add);
+        }
+
+        // Normaliza escala en buckets fijos.
+        for (String key : List.of("EFECTIVO", "TARJETA", "TRANSFERENCIA")) {
+            paymentMethods.put(key, paymentMethods.get(key).setScale(2, RoundingMode.HALF_UP));
+        }
+        if (paymentMethods.containsKey("SIN_REGISTRAR")) {
+            paymentMethods.put(
+                    "SIN_REGISTRAR",
+                    paymentMethods.get("SIN_REGISTRAR").setScale(2, RoundingMode.HALF_UP)
+            );
+        }
+        return paymentMethods;
+    }
+
+    private static String analyticsPaymentKey(PaymentMethod method) {
+        if (method == null) {
+            return "SIN_REGISTRAR";
+        }
+        return switch (method) {
+            case CASH -> "EFECTIVO";
+            case CARD -> "TARJETA";
+            case TRANSFER -> "TRANSFERENCIA";
+        };
     }
 
     @Transactional

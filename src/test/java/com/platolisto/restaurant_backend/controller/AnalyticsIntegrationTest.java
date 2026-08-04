@@ -70,6 +70,7 @@ class AnalyticsIntegrationTest {
                 .orderType(OrderType.IN_TABLE)
                 .tableNumber("1")
                 .status(OrderStatus.CLOSED)
+                .paymentMethod(PaymentMethod.CASH)
                 .totalAmount(new BigDecimal("300.00"))
                 .build());
 
@@ -104,7 +105,9 @@ class AnalyticsIntegrationTest {
                 .andExpect(jsonPath("$.totalSales", is(300.0)))
                 .andExpect(jsonPath("$.totalClosedOrders", is(1)))
                 .andExpect(jsonPath("$.averageTicket", is(300.0)))
-                .andExpect(jsonPath("$.paymentMethods.EFECTIVO", notNullValue()));
+                .andExpect(jsonPath("$.paymentMethods.EFECTIVO", is(300.0)))
+                .andExpect(jsonPath("$.paymentMethods.TARJETA", is(0.0)))
+                .andExpect(jsonPath("$.paymentMethods.TRANSFERENCIA", is(0.0)));
     }
 
     @Test
