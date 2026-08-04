@@ -9,13 +9,19 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Asegura staff de demo para el tenant {@code latrattoria} en local/QA.
+ * No corre en {@code prod}. Nunca loguea PINs en claro.
+ */
 @Component
+@Profile({"local", "qa"})
 @RequiredArgsConstructor
 @Slf4j
 public class QaSeedDataLoader implements ApplicationRunner {
@@ -33,7 +39,6 @@ public class QaSeedDataLoader implements ApplicationRunner {
 
         Restaurant restaurant = optional.get();
 
-        // Actualizar/Asegurar PINs de staff QA con el PasswordEncoder activo
         updateOrCreateStaff(restaurant, "Admin QA", StaffRole.ADMIN, "1111");
         updateOrCreateStaff(restaurant, "Mesero Carlos", StaffRole.MESERO, "2222");
         updateOrCreateStaff(restaurant, "Chef Luigi", StaffRole.COCINA, "3333");
@@ -58,6 +63,6 @@ public class QaSeedDataLoader implements ApplicationRunner {
                     .active(true)
                     .build());
         }
-        log.info("Staff QA cargado: {} ({}) PIN={}", name, role, rawPin);
+        log.info("Staff QA asegurado: {} ({})", name, role);
     }
 }
