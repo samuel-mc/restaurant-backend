@@ -113,7 +113,7 @@ class TenantFilterTest {
 
         // Then
         assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_NOT_FOUND);
-        assertThat(response.getContentAsString()).contains("No se encontró un restaurante activo");
+        assertThat(response.getContentAsString()).contains("TENANT_NOT_FOUND");
         verifyNoInteractions(filterChain); // No continúa la cadena
     }
 }

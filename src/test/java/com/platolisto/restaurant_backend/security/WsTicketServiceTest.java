@@ -25,6 +25,7 @@ class WsTicketServiceTest {
         ReflectionTestUtils.setField(jwtService, "secretKey", Base64.getEncoder().encodeToString(key));
         ReflectionTestUtils.setField(jwtService, "jwtExpiration", 86_400_000L);
         ReflectionTestUtils.setField(jwtService, "wsTicketExpirationMs", 60_000L);
+        ReflectionTestUtils.setField(jwtService, "impersonationExpirationMs", 300_000L);
         ReflectionTestUtils.invokeMethod(jwtService, "validateSecretKey");
         wsTicketService = new WsTicketService(jwtService);
     }
