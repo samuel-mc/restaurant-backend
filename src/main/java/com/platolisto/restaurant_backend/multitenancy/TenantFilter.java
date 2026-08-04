@@ -29,6 +29,7 @@ public class TenantFilter extends OncePerRequestFilter {
                 || path.startsWith("/api/v1/superadmin/")
                 || path.startsWith("/api/v1/super-admin/")
                 || path.startsWith("/api/v1/tenants/register")
+                || "/api/v1/public/health".equals(path)
                 // Logout solo necesita el JWT; SuperAdmin no siempre tiene tenant en Host.
                 || "/api/v1/auth/logout".equals(path);
     }

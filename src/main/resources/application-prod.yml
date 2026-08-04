@@ -1,0 +1,69 @@
+# ==============================================================================
+# CONFIGURACIÓN DE PRODUCCIÓN (SPRING PROFILE: prod)
+# Stack: Neon Database (PostgreSQL SSL) + Render (Spring Boot)
+# ==============================================================================
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    # URL de conexión para Neon Database (SSL obligatorio sslmode=require)
+    url: ${DATABASE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:neondb}?sslmode=require}
+    username: ${DATABASE_USERNAME:neondb_owner}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:10}
+      minimum-idle: ${HIKARI_MIN_IDLE:2}
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    baseline-version: 0
+    locations: classpath:db/migration
+
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: native
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+application:
+  superadmin:
+    bootstrap: false
+  security:
+    jwt:
+      secret-key: ${JWT_SECRET}
+      expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    trust-forwarded-headers: true
+    cors:
+      # Permite dominios de producción Vercel (incluyendo wildcards *.platolisto.com)
+      allowed-origins: ${ALLOWED_ORIGINS:https://platolisto.com,https://*.platolisto.com,https://*.vercel.app}
+    table-qr:
+      allow-legacy-tokens: ${TABLE_QR_ALLOW_LEGACY:false}
+      secret-key: ${TABLE_QR_SECRET_KEY}
+
+cloudflare:
+  r2:
+    enabled: ${CLOUDFLARE_R2_ENABLED:true}

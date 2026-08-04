@@ -48,6 +48,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/public/staff", "/api/v1/public/staff/**").permitAll()
                 .requestMatchers("/api/v1/superadmin/auth/login").permitAll()
                 .requestMatchers("/api/v1/tenants/register").permitAll()
+                .requestMatchers("/api/v1/public/**").permitAll()
                 .requestMatchers("/api/v1/menu/**").permitAll()
                 .requestMatchers("/api/v1/orders/**").permitAll()
                 .requestMatchers("/api/v1/restaurants/profile").permitAll()
