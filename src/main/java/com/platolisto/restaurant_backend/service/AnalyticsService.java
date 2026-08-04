@@ -40,7 +40,8 @@ public class AnalyticsService {
         OffsetDateTime now = OffsetDateTime.now(zone);
         OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay().atOffset(zone);
 
-        Object[] todayAgg = safeAggregate(startOfDay, now);
+        // Caja del día: solo CLOSED → totalSales ≡ suma EFECTIVO+TARJETA+TRANSFERENCIA(+SIN_REGISTRAR).
+        Object[] todayAgg = safeClosedAggregate(startOfDay, now);
         BigDecimal totalSales = toBigDecimal(todayAgg[0]);
         long totalClosedOrders = toLong(todayAgg[1]);
         BigDecimal averageTicket = averageTicket(totalSales, totalClosedOrders);
@@ -56,8 +57,8 @@ public class AnalyticsService {
         Map<String, BigDecimal> paymentMethods = sumPaymentMethods(startOfDay, now);
 
         List<AnalyticsSummaryResponse.TopProduct> topProducts = new ArrayList<>();
-        for (Object[] row : orderRepository.findTopProductsByRevenue(
-                OrderStatus.CANCELLED,
+        for (Object[] row : orderRepository.findTopClosedProductsByRevenue(
+                OrderStatus.CLOSED,
                 startOfDay,
                 now,
                 PageRequest.of(0, 5)
@@ -236,6 +237,19 @@ public class AnalyticsService {
 
     private Object[] safeAggregate(OffsetDateTime from, OffsetDateTime to) {
         List<Object[]> rows = orderRepository.aggregateSales(OrderStatus.CANCELLED, from, to);
+        if (rows == null || rows.isEmpty()) {
+            return new Object[]{BigDecimal.ZERO, 0L};
+        }
+        Object[] row = rows.get(0);
+        if (row == null || row.length < 2) {
+            return new Object[]{BigDecimal.ZERO, 0L};
+        }
+        return row;
+    }
+
+    /** Agregado diario / Corte Z: únicamente órdenes CLOSED. */
+    private Object[] safeClosedAggregate(OffsetDateTime from, OffsetDateTime to) {
+        List<Object[]> rows = orderRepository.aggregateClosedSales(OrderStatus.CLOSED, from, to);
         if (rows == null || rows.isEmpty()) {
             return new Object[]{BigDecimal.ZERO, 0L};
         }

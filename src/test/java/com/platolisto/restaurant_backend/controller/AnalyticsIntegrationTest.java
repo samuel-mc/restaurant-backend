@@ -74,6 +74,17 @@ class AnalyticsIntegrationTest {
                 .totalAmount(new BigDecimal("300.00"))
                 .build());
 
+        // Mesa abierta: no debe inflar totalSales del daily / Corte Z.
+        orderRepository.save(Order.builder()
+                .restaurant(mockRestaurant)
+                .uuid(UUID.randomUUID())
+                .customerName("Mesa abierta")
+                .orderType(OrderType.IN_TABLE)
+                .tableNumber("2")
+                .status(OrderStatus.DELIVERED)
+                .totalAmount(new BigDecimal("999.00"))
+                .build());
+
         User adminUser = userRepository.save(User.builder()
                 .restaurant(mockRestaurant)
                 .name("Manager Test")

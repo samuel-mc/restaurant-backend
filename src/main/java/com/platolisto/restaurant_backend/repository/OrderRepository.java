@@ -94,6 +94,22 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
             @Param("to") OffsetDateTime to
     );
 
+    /**
+     * Venta del día / Corte Z: solo órdenes CLOSED (excluye mesas abiertas y canceladas).
+     */
+    @Query("""
+            SELECT COALESCE(SUM(o.totalAmount), 0), COUNT(o)
+            FROM Order o
+            WHERE o.status = :closed
+              AND o.createdAt >= :from
+              AND o.createdAt < :to
+            """)
+    List<Object[]> aggregateClosedSales(
+            @Param("closed") OrderStatus closed,
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to
+    );
+
     @Query("""
             SELECT FUNCTION('DATE', o.createdAt), COALESCE(SUM(o.totalAmount), 0)
             FROM Order o
@@ -122,6 +138,25 @@ public interface OrderRepository extends JpaRepository<Order, Long>, JpaSpecific
             """)
     List<Object[]> findTopProductsByRevenue(
             @Param("cancelled") OrderStatus cancelled,
+            @Param("from") OffsetDateTime from,
+            @Param("to") OffsetDateTime to,
+            Pageable pageable
+    );
+
+    /** Top productos del Corte Z / daily: solo líneas de órdenes CLOSED. */
+    @Query("""
+            SELECT p.name, COALESCE(SUM(d.quantity), 0), COALESCE(SUM(d.unitPrice * d.quantity), 0)
+            FROM Order o
+            JOIN o.details d
+            JOIN d.product p
+            WHERE o.status = :closed
+              AND o.createdAt >= :from
+              AND o.createdAt < :to
+            GROUP BY p.id, p.name
+            ORDER BY COALESCE(SUM(d.unitPrice * d.quantity), 0) DESC
+            """)
+    List<Object[]> findTopClosedProductsByRevenue(
+            @Param("closed") OrderStatus closed,
             @Param("from") OffsetDateTime from,
             @Param("to") OffsetDateTime to,
             Pageable pageable
