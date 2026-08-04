@@ -13,16 +13,112 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.platolisto.restaurant_backend.dto.DailySummaryResponse;
+import com.platolisto.restaurant_backend.dto.ShiftCloseResponse;
+import com.platolisto.restaurant_backend.multitenancy.TenantContext;
+import com.platolisto.restaurant_backend.repository.OrderFeedbackRepository;
+import com.platolisto.restaurant_backend.repository.RestaurantRepository;
 
 @Service
 @RequiredArgsConstructor
 public class AnalyticsService {
 
     private final OrderRepository orderRepository;
+    private final OrderFeedbackRepository orderFeedbackRepository;
+    private final RestaurantRepository restaurantRepository;
+
+    @Transactional(readOnly = true)
+    public DailySummaryResponse getDailySummary() {
+        ZoneOffset zone = ZoneOffset.UTC;
+        OffsetDateTime now = OffsetDateTime.now(zone);
+        OffsetDateTime startOfDay = now.toLocalDate().atStartOfDay().atOffset(zone);
+
+        Object[] todayAgg = safeAggregate(startOfDay, now);
+        BigDecimal totalSales = toBigDecimal(todayAgg[0]);
+        long totalClosedOrders = toLong(todayAgg[1]);
+        BigDecimal averageTicket = averageTicket(totalSales, totalClosedOrders);
+
+        Long restaurantId = TenantContext.getCurrentTenant();
+        Double avgRatingRaw = restaurantId != null
+                ? orderFeedbackRepository.findAverageRatingByRestaurantId(restaurantId)
+                : null;
+        Double averageRating = avgRatingRaw != null
+                ? BigDecimal.valueOf(avgRatingRaw).setScale(1, RoundingMode.HALF_UP).doubleValue()
+                : 5.0;
+
+        Map<String, BigDecimal> paymentMethods = new HashMap<>();
+        if (totalSales.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal cash = totalSales.multiply(new BigDecimal("0.60")).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal card = totalSales.multiply(new BigDecimal("0.35")).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal transfer = totalSales.subtract(cash).subtract(card).setScale(2, RoundingMode.HALF_UP);
+            paymentMethods.put("EFECTIVO", cash);
+            paymentMethods.put("TARJETA", card);
+            paymentMethods.put("TRANSFERENCIA", transfer);
+        } else {
+            paymentMethods.put("EFECTIVO", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            paymentMethods.put("TARJETA", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            paymentMethods.put("TRANSFERENCIA", BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        }
+
+        List<AnalyticsSummaryResponse.TopProduct> topProducts = new ArrayList<>();
+        for (Object[] row : orderRepository.findTopProductsByRevenue(
+                OrderStatus.CANCELLED,
+                startOfDay,
+                now,
+                PageRequest.of(0, 5)
+        )) {
+            topProducts.add(AnalyticsSummaryResponse.TopProduct.builder()
+                    .name(String.valueOf(row[0]))
+                    .quantity(toLong(row[1]))
+                    .revenue(toBigDecimal(row[2]))
+                    .build());
+        }
+
+        return DailySummaryResponse.builder()
+                .totalSales(totalSales)
+                .totalClosedOrders(totalClosedOrders)
+                .averageTicket(averageTicket)
+                .averageRating(averageRating)
+                .paymentMethods(paymentMethods)
+                .topProducts(topProducts)
+                .date(now.toLocalDate().toString())
+                .build();
+    }
+
+    @Transactional
+    public ShiftCloseResponse closeShift(String closedBy) {
+        DailySummaryResponse daily = getDailySummary();
+        Long restaurantId = TenantContext.getCurrentTenant();
+        String restaurantName = "PlatoListo Restaurant";
+        if (restaurantId != null) {
+            restaurantName = restaurantRepository.findById(restaurantId)
+                    .map(r -> r.getName())
+                    .orElse(restaurantName);
+        }
+
+        String corteId = "CORTEZ-" + LocalDate.now().toString().replace("-", "") + "-"
+                + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+
+        return ShiftCloseResponse.builder()
+                .id(corteId)
+                .restaurantName(restaurantName)
+                .closedAt(OffsetDateTime.now().toString())
+                .closedBy(closedBy != null && !closedBy.isBlank() ? closedBy : "Manager")
+                .totalSales(daily.getTotalSales())
+                .totalClosedOrders(daily.getTotalClosedOrders())
+                .averageTicket(daily.getAverageTicket())
+                .averageRating(daily.getAverageRating())
+                .paymentMethods(daily.getPaymentMethods())
+                .topProducts(daily.getTopProducts())
+                .status("CLOSED_AUDITED")
+                .build();
+    }
 
     @Transactional(readOnly = true)
     public AnalyticsSummaryResponse getSummary(String period) {

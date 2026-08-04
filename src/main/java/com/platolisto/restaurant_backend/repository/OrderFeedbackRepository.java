@@ -36,4 +36,7 @@ public interface OrderFeedbackRepository extends JpaRepository<OrderFeedback, Lo
     long countByRestaurant_IdAndStatus(Long restaurantId, FeedbackStatus status);
 
     long countByRestaurant_IdAndStatusAndUrgentTrue(Long restaurantId, FeedbackStatus status);
+
+    @Query("SELECT AVG(f.stars) FROM OrderFeedback f WHERE f.restaurant.id = :restaurantId")
+    Double findAverageRatingByRestaurantId(@Param("restaurantId") Long restaurantId);
 }
