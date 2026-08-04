@@ -40,6 +40,7 @@ public class OrderFeedbackService {
     private final OrderRepository orderRepository;
     private final OrderFeedbackRepository feedbackRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final WebSocketService webSocketService;
 
     @Transactional(readOnly = true)
     public FeedbackStatusResponse status(UUID orderUuid) {
@@ -82,11 +83,15 @@ public class OrderFeedbackService {
 
         FeedbackOutcome outcome;
         boolean urgent = false;
+        boolean requiresManagerAttention = false;
         String googleMapsUrl = null;
 
         if (stars <= 3) {
             outcome = FeedbackOutcome.PRIVATE_COMPLAINT;
             urgent = true;
+            if (stars <= 2) {
+                requiresManagerAttention = true;
+            }
         } else if (stars == 5) {
             googleMapsUrl = safeMapsUrl(order.getRestaurant());
             outcome = googleMapsUrl != null
@@ -107,6 +112,7 @@ public class OrderFeedbackService {
                 .outcome(outcome)
                 .status(FeedbackStatus.OPEN)
                 .urgent(urgent)
+                .requiresManagerAttention(requiresManagerAttention)
                 .tableNumber(order.getTableNumber())
                 .build();
 
@@ -124,6 +130,24 @@ public class OrderFeedbackService {
                     orderUuid,
                     stars
             );
+        }
+
+        if (requiresManagerAttention && order.getRestaurant().getSubdomain() != null) {
+            String tableLabel = order.getTableNumber() != null ? "Mesa " + order.getTableNumber() : "Sin mesa";
+            List<String> tags = reason != null ? List.of(reason) : List.of("Opinión baja");
+            com.platolisto.restaurant_backend.dto.CriticalFeedbackAlertEvent alertEvent =
+                    com.platolisto.restaurant_backend.dto.CriticalFeedbackAlertEvent.builder()
+                            .type("CRITICAL_FEEDBACK_ALERT")
+                            .orderUuid(order.getUuid())
+                            .tableNumber(tableLabel)
+                            .stars(stars)
+                            .tags(tags)
+                            .comment(comment)
+                            .timestamp(OffsetDateTime.now().toString())
+                            .requiresManagerAttention(true)
+                            .build();
+
+            webSocketService.broadcastCriticalFeedbackAlert(order.getRestaurant().getSubdomain(), alertEvent);
         }
 
         return SubmitFeedbackResponse.builder()
@@ -186,6 +210,7 @@ public class OrderFeedbackService {
                 .outcome(f.getOutcome())
                 .status(f.getStatus())
                 .urgent(f.isUrgent())
+                .requiresManagerAttention(f.isRequiresManagerAttention() || f.getStars() <= 2)
                 .tableNumber(f.getTableNumber())
                 .createdAt(f.getCreatedAt())
                 .resolvedAt(f.getResolvedAt())

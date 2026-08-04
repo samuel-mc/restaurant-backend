@@ -58,6 +58,10 @@ public class OrderFeedback {
     @Column(nullable = false)
     private boolean urgent = false;
 
+    @Builder.Default
+    @Column(name = "requires_manager_attention", nullable = false)
+    private boolean requiresManagerAttention = false;
+
     @Column(name = "table_number", length = 10)
     private String tableNumber;
 

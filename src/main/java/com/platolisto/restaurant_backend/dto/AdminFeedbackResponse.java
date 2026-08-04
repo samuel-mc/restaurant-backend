@@ -22,6 +22,7 @@ public class AdminFeedbackResponse {
     private FeedbackOutcome outcome;
     private FeedbackStatus status;
     private boolean urgent;
+    private boolean requiresManagerAttention;
     private String tableNumber;
     private OffsetDateTime createdAt;
     private OffsetDateTime resolvedAt;

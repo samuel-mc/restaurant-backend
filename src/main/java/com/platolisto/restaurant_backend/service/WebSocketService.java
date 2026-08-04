@@ -32,4 +32,15 @@ public class WebSocketService {
         log.info("Broadcasting product availability to topic {}: {}", topic, event);
         messagingTemplate.convertAndSend(topic, event);
     }
+
+    public void broadcastCriticalFeedbackAlert(String tenantSlug, com.platolisto.restaurant_backend.dto.CriticalFeedbackAlertEvent event) {
+        if (tenantSlug == null || tenantSlug.isBlank()) {
+            log.warn("Cannot broadcast critical feedback alert: tenantSlug is blank");
+            return;
+        }
+
+        String topic = "/topic/" + tenantSlug.trim() + "/admin-alerts";
+        log.info("Broadcasting critical feedback alert to topic {}: {}", topic, event);
+        messagingTemplate.convertAndSend(topic, event);
+    }
 }

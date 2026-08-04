@@ -40,6 +40,8 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
             Pattern.compile("^/topic/order/[0-9a-fA-F-]{36}$");
     private static final Pattern MENU_UPDATES_TOPIC =
             Pattern.compile("^/topic/([^/]+)/menu-updates$");
+    private static final Pattern ADMIN_ALERTS_TOPIC =
+            Pattern.compile("^/topic/([^/]+)/admin-alerts$");
 
 
     private final JwtService jwtService;
@@ -136,6 +138,12 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
         Matcher feedbackMatcher = ADMIN_FEEDBACK_TOPIC.matcher(destination);
         if (feedbackMatcher.matches()) {
             requireAdminInboxAccess(accessor, resolveRestaurantIdBySlug(feedbackMatcher.group(1)));
+            return;
+        }
+
+        Matcher alertsMatcher = ADMIN_ALERTS_TOPIC.matcher(destination);
+        if (alertsMatcher.matches()) {
+            requireKitchenAccess(accessor, resolveRestaurantIdBySlug(alertsMatcher.group(1)));
             return;
         }
 
