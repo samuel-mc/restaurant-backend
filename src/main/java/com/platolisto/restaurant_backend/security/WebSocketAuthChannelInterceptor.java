@@ -38,6 +38,9 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
             Pattern.compile("^/topic/restaurants/(\\d+)/orders$");
     private static final Pattern ORDER_TRACKING_TOPIC =
             Pattern.compile("^/topic/order/[0-9a-fA-F-]{36}$");
+    private static final Pattern MENU_UPDATES_TOPIC =
+            Pattern.compile("^/topic/([^/]+)/menu-updates$");
+
 
     private final JwtService jwtService;
     private final WsTicketService wsTicketService;
@@ -118,6 +121,11 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
         if (ORDER_TRACKING_TOPIC.matcher(destination).matches()) {
             return;
         }
+
+        if (MENU_UPDATES_TOPIC.matcher(destination).matches()) {
+            return;
+        }
+
 
         Matcher adminMatcher = ADMIN_SLUG_TOPIC.matcher(destination);
         if (adminMatcher.matches()) {

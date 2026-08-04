@@ -32,6 +32,8 @@ public class ProductService {
     private final CategoryRepository categoryRepository;
     private final RestaurantRepository restaurantRepository;
     private final ObjectStorageService objectStorageService;
+    private final WebSocketService webSocketService;
+
 
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
@@ -136,15 +138,34 @@ public class ProductService {
 
     @Transactional
     public ProductResponse toggleAvailability(UUID uuid) {
+        return updateProductAvailability(uuid, null);
+    }
+
+    @Transactional
+    public ProductResponse updateProductAvailability(UUID uuid, Boolean isAvailable) {
         Product product = productRepository.findByUuid(uuid)
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró el producto con UUID: " + uuid));
 
-        product.setAvailable(!product.isAvailable());
+        boolean nextState = (isAvailable != null) ? isAvailable : !product.isAvailable();
+        product.setAvailable(nextState);
         Product updated = productRepository.save(product);
         log.info("Disponibilidad del producto cambiada a {}: UUID {}", updated.isAvailable(), uuid);
 
+        String tenantSlug = updated.getRestaurant() != null ? updated.getRestaurant().getSubdomain() : null;
+        String categoryIdStr = updated.getCategory() != null ? String.valueOf(updated.getCategory().getId()) : "";
+
+        if (tenantSlug != null) {
+            webSocketService.broadcastProductAvailability(
+                    tenantSlug,
+                    updated.getUuid(),
+                    updated.isAvailable(),
+                    categoryIdStr
+            );
+        }
+
         return mapToResponse(updated);
     }
+
 
     private Long requireRestaurantId() {
         Long restaurantId = TenantContext.getCurrentTenant();

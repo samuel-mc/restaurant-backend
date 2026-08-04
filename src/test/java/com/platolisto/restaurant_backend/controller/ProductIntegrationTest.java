@@ -189,6 +189,38 @@ class ProductIntegrationTest {
     }
 
     @Test
+    void shouldUpdateMenuProductAvailabilitySuccessfully() throws Exception {
+        // Given: Crear un producto
+        ProductRequest request = ProductRequest.builder()
+                .name("Bisquet Extra")
+                .price(new BigDecimal("2.50"))
+                .categoryId(mockCategory.getId())
+                .build();
+
+        String responseContent = createProductRequest(request);
+        UUID productUuid = UUID.fromString(objectMapper.readTree(responseContent).get("uuid").asText());
+
+        // When: Invocar PATCH /api/v1/admin/menu/products/{id}/availability con body {"isAvailable": false}
+        mockMvc.perform(patch("/api/v1/admin/menu/products/" + productUuid + "/availability")
+                        .header("X-Tenant", "kfc")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"isAvailable\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(false));
+
+        // When: Invocar de nuevo con body {"isAvailable": true}
+        mockMvc.perform(patch("/api/v1/admin/menu/products/" + productUuid + "/availability")
+                        .header("X-Tenant", "kfc")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"isAvailable\": true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true));
+    }
+
+
+    @Test
     void shouldSoftDeleteProductSuccessfully() throws Exception {
         // Given: Crear un producto
         ProductRequest request = ProductRequest.builder()
