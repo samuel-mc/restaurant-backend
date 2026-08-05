@@ -58,8 +58,8 @@ application:
       expiration-ms: ${JWT_EXPIRATION_MS:86400000}
     trust-forwarded-headers: true
     cors:
-      # Permite dominios de producción Vercel (incluyendo wildcards *.platolisto.com)
-      allowed-origins: ${ALLOWED_ORIGINS:https://platolisto.com,https://*.platolisto.com,https://*.vercel.app}
+      # Permite apex, www y wildcards *.platolistoapp.com
+      allowed-origins: ${ALLOWED_ORIGINS:https://platolistoapp.com,https://www.platolistoapp.com,https://*.platolistoapp.com,https://*.vercel.app}
     table-qr:
       allow-legacy-tokens: ${TABLE_QR_ALLOW_LEGACY:false}
       secret-key: ${TABLE_QR_SECRET_KEY}
