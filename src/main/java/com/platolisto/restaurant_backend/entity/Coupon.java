@@ -43,8 +43,16 @@ public class Coupon {
     @Column(nullable = false)
     private boolean active = true;
 
+    /** Hasta cuándo se puede canjear el código (no es la renovación del tenant). */
     @Column(name = "expires_at")
     private OffsetDateTime expiresAt;
+
+    /**
+     * Días de entitlement al canjear. Null = no fija {@code Restaurant.currentPeriodEnd}.
+     * Distinto de {@link #expiresAt}.
+     */
+    @Column(name = "grant_duration_days")
+    private Integer grantDurationDays;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

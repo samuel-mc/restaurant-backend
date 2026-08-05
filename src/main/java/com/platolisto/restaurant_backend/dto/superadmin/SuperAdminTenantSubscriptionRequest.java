@@ -17,4 +17,10 @@ public class SuperAdminTenantSubscriptionRequest {
 
     @NotNull(message = "El estado de pago es requerido")
     private PaymentStatus paymentStatus;
+
+    /**
+     * ISO-8601 opcional. Null = no cambiar.
+     * Cadena vacía = limpiar período de renovación.
+     */
+    private String currentPeriodEnd;
 }

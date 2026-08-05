@@ -91,4 +91,26 @@ class SuperAdminCouponServiceTest {
         verify(couponRepository).save(captor.capture());
         assertThat(captor.getValue().isActive()).isFalse();
     }
+
+    @Test
+    void createPersistsGrantDurationDays() {
+        when(couponRepository.existsByCodeIgnoreCase("PRO-30")).thenReturn(false);
+        when(couponRepository.save(any(Coupon.class))).thenAnswer(inv -> {
+            Coupon c = inv.getArgument(0);
+            c.setId(2L);
+            return c;
+        });
+
+        var request = SuperAdminCouponCreateRequest.builder()
+                .code("pro-30")
+                .grantDurationDays(30)
+                .build();
+
+        var response = superAdminCouponService.createCoupon(request, "sa@platolisto.com");
+
+        assertThat(response.getGrantDurationDays()).isEqualTo(30);
+        ArgumentCaptor<Coupon> captor = ArgumentCaptor.forClass(Coupon.class);
+        verify(couponRepository).save(captor.capture());
+        assertThat(captor.getValue().getGrantDurationDays()).isEqualTo(30);
+    }
 }

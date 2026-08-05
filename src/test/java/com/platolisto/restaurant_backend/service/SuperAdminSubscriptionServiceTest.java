@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.userdetails.UserDetailsService;
 
+import java.time.OffsetDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -124,5 +125,48 @@ class SuperAdminSubscriptionServiceTest {
 
         assertThat(response.getPaymentStatus()).isEqualTo("PENDING_PAYMENT");
         assertThat(response.isWebsitePublished()).isFalse();
+    }
+
+    @Test
+    void setsCurrentPeriodEndWhenProvided() {
+        when(restaurantRepository.findById(10L)).thenReturn(Optional.of(restaurant));
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        String periodEnd = OffsetDateTime.now().plusDays(45).toString();
+        var request = SuperAdminTenantSubscriptionRequest.builder()
+                .plan(SubscriptionPlan.PRO)
+                .paymentStatus(PaymentStatus.ACTIVE)
+                .currentPeriodEnd(periodEnd)
+                .build();
+
+        var response = superAdminService.updateTenantSubscription(10L, request, "sa@platolisto.com");
+
+        assertThat(response.getCurrentPeriodEnd()).isNotNull();
+        assertThat(response.getBillingInterval()).isEqualTo("MONTHLY");
+        ArgumentCaptor<Restaurant> captor = ArgumentCaptor.forClass(Restaurant.class);
+        verify(restaurantRepository).save(captor.capture());
+        assertThat(captor.getValue().getCurrentPeriodEnd()).isNotNull();
+        assertThat(captor.getValue().getCurrentPeriodStart()).isNotNull();
+    }
+
+    @Test
+    void clearsCurrentPeriodEndWhenEmptyString() {
+        restaurant.setCurrentPeriodStart(OffsetDateTime.now());
+        restaurant.setCurrentPeriodEnd(OffsetDateTime.now().plusDays(10));
+        when(restaurantRepository.findById(10L)).thenReturn(Optional.of(restaurant));
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var request = SuperAdminTenantSubscriptionRequest.builder()
+                .plan(SubscriptionPlan.PRO)
+                .paymentStatus(PaymentStatus.ACTIVE)
+                .currentPeriodEnd("")
+                .build();
+
+        var response = superAdminService.updateTenantSubscription(10L, request, "sa@platolisto.com");
+
+        assertThat(response.getCurrentPeriodEnd()).isNull();
+        ArgumentCaptor<Restaurant> captor = ArgumentCaptor.forClass(Restaurant.class);
+        verify(restaurantRepository).save(captor.capture());
+        assertThat(captor.getValue().getCurrentPeriodEnd()).isNull();
     }
 }

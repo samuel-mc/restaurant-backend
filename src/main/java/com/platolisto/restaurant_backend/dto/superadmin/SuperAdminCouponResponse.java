@@ -16,5 +16,7 @@ public class SuperAdminCouponResponse {
     private int redemptionCount;
     private boolean active;
     private String expiresAt;
+    /** Días de entitlement al canjear; null = no fija período. */
+    private Integer grantDurationDays;
     private String createdAt;
 }

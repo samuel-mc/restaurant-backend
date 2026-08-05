@@ -32,5 +32,9 @@ public class RestaurantProfileResponse {
     private boolean websitePublished;
     private String plan;
     private String paymentStatus;
+    private String currentPeriodStart;
+    private String currentPeriodEnd;
+    private String billingInterval;
     private OffsetDateTime updatedAt;
 }
+

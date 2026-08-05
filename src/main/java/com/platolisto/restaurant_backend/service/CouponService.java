@@ -1,5 +1,6 @@
 package com.platolisto.restaurant_backend.service;
 
+import com.platolisto.restaurant_backend.billing.SubscriptionPeriodSupport;
 import com.platolisto.restaurant_backend.dto.RedeemCouponRequest;
 import com.platolisto.restaurant_backend.dto.RedeemCouponResponse;
 import com.platolisto.restaurant_backend.entity.Coupon;
@@ -57,21 +58,24 @@ public class CouponService {
         if (granted == SubscriptionPlan.PRO) {
             restaurant.setWebsitePublished(true);
         }
+        applyGrantPeriod(restaurant, coupon);
         restaurantRepository.save(restaurant);
 
         log.info(
-                "Cupón {} canjeado por restaurant={} → plan={}, payment=ACTIVE",
+                "Cupón {} canjeado por restaurant={} → plan={}, payment=ACTIVE, periodEnd={}",
                 coupon.getCode(),
                 restaurant.getSubdomain(),
-                granted
+                granted,
+                restaurant.getCurrentPeriodEnd()
         );
 
         return RedeemCouponResponse.builder()
-                .message("Cupón aplicado. Tu Plan Pro quedó activo.")
+                .message(buildRedeemMessage(restaurant, coupon))
                 .plan(restaurant.getPlan().name())
                 .paymentStatus(restaurant.getPaymentStatus().name())
                 .websitePublished(restaurant.isWebsitePublished())
                 .redeemedCode(coupon.getCode())
+                .currentPeriodEnd(format(restaurant.getCurrentPeriodEnd()))
                 .build();
     }
 
@@ -107,6 +111,7 @@ public class CouponService {
         if (granted == SubscriptionPlan.PRO) {
             restaurant.setWebsitePublished(true);
         }
+        applyGrantPeriod(restaurant, coupon);
         return true;
     }
 
@@ -133,6 +138,26 @@ public class CouponService {
         }
         return restaurantRepository.findById(restaurantId)
                 .orElseThrow(() -> new IllegalArgumentException("El restaurante asociado no existe."));
+    }
+
+
+    private static void applyGrantPeriod(Restaurant restaurant, Coupon coupon) {
+        Integer days = coupon.getGrantDurationDays();
+        if (days != null) {
+            SubscriptionPeriodSupport.applyGrantDuration(restaurant, days);
+        }
+    }
+
+    private static String buildRedeemMessage(Restaurant restaurant, Coupon coupon) {
+        if (coupon.getGrantDurationDays() != null && restaurant.getCurrentPeriodEnd() != null) {
+            return "Cupón aplicado. Tu Plan Pro quedó activo hasta "
+                    + restaurant.getCurrentPeriodEnd().toLocalDate() + ".";
+        }
+        return "Cupón aplicado. Tu Plan Pro quedó activo.";
+    }
+
+    private static String format(OffsetDateTime value) {
+        return value == null ? null : value.toString();
     }
 
     private static String normalizeCode(String raw) {

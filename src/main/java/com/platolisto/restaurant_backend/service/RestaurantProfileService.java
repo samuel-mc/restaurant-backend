@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -201,10 +202,20 @@ public class RestaurantProfileService {
                 .updatedAt(restaurant.getUpdatedAt());
 
         if (includeBilling) {
-            builder.plan(plan.name()).paymentStatus(paymentStatus.name());
+            builder.plan(plan.name())
+                    .paymentStatus(paymentStatus.name())
+                    .currentPeriodStart(formatPeriod(restaurant.getCurrentPeriodStart()))
+                    .currentPeriodEnd(formatPeriod(restaurant.getCurrentPeriodEnd()))
+                    .billingInterval(restaurant.getBillingInterval() != null
+                            ? restaurant.getBillingInterval().name()
+                            : null);
         }
 
         return builder.build();
+    }
+
+    private static String formatPeriod(OffsetDateTime value) {
+        return value == null ? null : value.toString();
     }
 
     public static int normalizeTableCount(int tableCount) {

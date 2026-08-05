@@ -104,6 +104,22 @@ public class Restaurant {
     @Column(name = "payment_status", nullable = false, length = 30)
     private PaymentStatus paymentStatus = PaymentStatus.ACTIVE;
 
+    /** Inicio del período de suscripción pagado / otorgado. */
+    @Column(name = "current_period_start")
+    private OffsetDateTime currentPeriodStart;
+
+    /**
+     * Fecha en la que toca renovar (fuente de verdad de renovación).
+     * Independiente de {@code Coupon.expiresAt}.
+     */
+    @Column(name = "current_period_end")
+    private OffsetDateTime currentPeriodEnd;
+
+    /** Intervalo comercial (MONTHLY | YEARLY); null si aún no se fijó período. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_interval", length = 20)
+    private BillingInterval billingInterval;
+
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;

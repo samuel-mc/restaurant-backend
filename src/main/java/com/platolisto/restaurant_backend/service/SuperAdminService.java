@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.billing.EstimatedMrrCalculator;
+import com.platolisto.restaurant_backend.billing.SubscriptionPeriodSupport;
 import com.platolisto.restaurant_backend.dto.LoginRequest;
 import com.platolisto.restaurant_backend.dto.LoginResponse;
 import com.platolisto.restaurant_backend.dto.superadmin.ImpersonateResponse;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -126,6 +128,7 @@ public class SuperAdminService {
             restaurant.setHasDelivery(false);
             restaurant.setHasReservations(false);
         }
+        applyPeriodEndIfPresent(restaurant, request.getCurrentPeriodEnd());
 
         Restaurant saved = restaurantRepository.save(restaurant);
         log.warn(
@@ -279,11 +282,37 @@ public class SuperAdminService {
                 .paymentStatus(r.getPaymentStatus() != null
                         ? r.getPaymentStatus().name()
                         : "ACTIVE")
+                .currentPeriodStart(format(r.getCurrentPeriodStart()))
+                .currentPeriodEnd(format(r.getCurrentPeriodEnd()))
+                .billingInterval(r.getBillingInterval() != null
+                        ? r.getBillingInterval().name()
+                        : null)
                 .active(r.isActive())
                 .websitePublished(r.isWebsitePublished())
                 .createdAt(format(r.getCreatedAt()))
                 .updatedAt(format(r.getUpdatedAt()))
                 .build();
+    }
+
+    /**
+     * Null = no cambiar. Cadena vacía = limpiar período.
+     */
+    private static void applyPeriodEndIfPresent(Restaurant restaurant, String rawPeriodEnd) {
+        if (rawPeriodEnd == null) {
+            return;
+        }
+        String trimmed = rawPeriodEnd.trim();
+        if (trimmed.isEmpty()) {
+            SubscriptionPeriodSupport.setPeriodEnd(restaurant, null);
+            return;
+        }
+        try {
+            SubscriptionPeriodSupport.setPeriodEnd(restaurant, OffsetDateTime.parse(trimmed));
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "La fecha de renovación debe ser ISO-8601 (ej. 2026-12-31T23:59:59Z)."
+            );
+        }
     }
 
     private static String format(OffsetDateTime value) {

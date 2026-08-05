@@ -48,6 +48,7 @@ public class SuperAdminCouponService {
         SubscriptionPlan grantsPlan = resolveGrantsPlan(request.getGrantsPlan());
         OffsetDateTime expiresAt = parseExpiresAt(request.getExpiresAt(), false);
 
+        Integer grantDurationDays = request.getGrantDurationDays();
         Coupon coupon = couponRepository.save(Coupon.builder()
                 .code(code)
                 .description(trimToNull(request.getDescription()))
@@ -56,6 +57,7 @@ public class SuperAdminCouponService {
                 .redemptionCount(0)
                 .active(true)
                 .expiresAt(expiresAt)
+                .grantDurationDays(grantDurationDays)
                 .build());
 
         log.info(
@@ -91,6 +93,11 @@ public class SuperAdminCouponService {
         if (request.getExpiresAt() != null) {
             coupon.setExpiresAt(parseExpiresAt(request.getExpiresAt(), true));
         }
+        if (Boolean.TRUE.equals(request.getClearGrantDurationDays())) {
+            coupon.setGrantDurationDays(null);
+        } else if (request.getGrantDurationDays() != null) {
+            coupon.setGrantDurationDays(request.getGrantDurationDays());
+        }
         if (request.getActive() != null) {
             coupon.setActive(request.getActive());
         }
@@ -116,6 +123,7 @@ public class SuperAdminCouponService {
                 .redemptionCount(coupon.getRedemptionCount())
                 .active(coupon.isActive())
                 .expiresAt(format(coupon.getExpiresAt()))
+                .grantDurationDays(coupon.getGrantDurationDays())
                 .createdAt(format(coupon.getCreatedAt()))
                 .build();
     }

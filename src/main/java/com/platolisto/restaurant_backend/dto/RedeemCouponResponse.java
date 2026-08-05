@@ -13,4 +13,5 @@ public class RedeemCouponResponse {
     private String paymentStatus;
     private boolean websitePublished;
     private String redeemedCode;
+    private String currentPeriodEnd;
 }

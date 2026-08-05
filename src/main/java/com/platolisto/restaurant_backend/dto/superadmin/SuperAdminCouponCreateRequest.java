@@ -3,6 +3,7 @@ package com.platolisto.restaurant_backend.dto.superadmin;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -34,4 +35,9 @@ public class SuperAdminCouponCreateRequest {
 
     /** ISO-8601 opcional (ej. 2026-12-31T23:59:59Z). */
     private String expiresAt;
+
+    /** Días de entitlement al canjear. Null = no fija período en el tenant. */
+    @Positive(message = "La duración del grant debe ser positiva")
+    @Max(value = 3650, message = "La duración del grant no puede superar 3650 días")
+    private Integer grantDurationDays;
 }

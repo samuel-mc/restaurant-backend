@@ -13,6 +13,9 @@ public class SuperAdminTenantResponse {
     private String subdomain;
     private String plan;
     private String paymentStatus;
+    private String currentPeriodStart;
+    private String currentPeriodEnd;
+    private String billingInterval;
     private boolean active;
     private boolean websitePublished;
     private String createdAt;
