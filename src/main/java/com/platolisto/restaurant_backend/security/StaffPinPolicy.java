@@ -3,22 +3,24 @@ package com.platolisto.restaurant_backend.security;
 import java.util.Set;
 
 /**
- * Política de PIN de personal: 6 dígitos y rechazo de patrones triviales.
+ * Política de PIN de personal: 4 dígitos y rechazo de patrones triviales.
  */
 public final class StaffPinPolicy {
 
-    public static final int PIN_LENGTH = 6;
-    public static final String PIN_REGEXP = "^\\d{6}$";
-    public static final String PIN_MESSAGE = "El PIN debe ser de exactamente 6 dígitos";
+    public static final int PIN_LENGTH = 4;
+    public static final String PIN_REGEXP = "^\\d{4}$";
+    public static final String PIN_MESSAGE = "El PIN debe ser de exactamente 4 dígitos";
     public static final String WEAK_PIN_MESSAGE =
-            "Ese PIN es muy fácil de adivinar. Elige 6 dígitos que no sean consecutivos ni repetidos.";
+            "Ese PIN es muy fácil de adivinar. Elige 4 dígitos que no sean consecutivos ni repetidos.";
 
     private static final Set<String> BANNED = Set.of(
-            "000000", "111111", "222222", "333333", "444444",
-            "555555", "666666", "777777", "888888", "999999",
-            "123456", "654321", "012345", "987654",
-            "112233", "121212", "123123", "111222",
-            "112211", "123321", "121121"
+            "0000", "1111", "2222", "3333", "4444",
+            "5555", "6666", "7777", "8888", "9999",
+            "1234", "4321", "0123", "9876",
+            "1212", "2121", "1122", "2211",
+            "1221", "2112", "1232", "2345",
+            "3456", "4567", "5678", "6789",
+            "0987", "1357", "2468"
     );
 
     private StaffPinPolicy() {
@@ -57,7 +59,7 @@ public final class StaffPinPolicy {
         if (ascending || descending) {
             return true;
         }
-        // Alternancia tipo 121212
+        // Alternancia tipo 1212
         boolean alternating = true;
         for (int i = 2; i < digits.length; i++) {
             if (digits[i] != digits[i % 2]) {
@@ -68,7 +70,7 @@ public final class StaffPinPolicy {
         if (alternating && digits[0] != digits[1]) {
             return true;
         }
-        // Pares gemelos tipo 112233
+        // Pares gemelos tipo 1122
         boolean twinPairs = true;
         for (int i = 0; i + 1 < digits.length; i += 2) {
             if (digits[i] != digits[i + 1]) {

@@ -11,22 +11,23 @@ class StaffPinPolicyTest {
 
     @Test
     void rejectsWeakPins() {
-        assertTrue(StaffPinPolicy.isWeak("000000"));
-        assertTrue(StaffPinPolicy.isWeak("123456"));
-        assertTrue(StaffPinPolicy.isWeak("654321"));
-        assertTrue(StaffPinPolicy.isWeak("121212"));
-        assertTrue(StaffPinPolicy.isWeak("112233"));
-        assertTrue(StaffPinPolicy.isWeak("112211"));
+        assertTrue(StaffPinPolicy.isWeak("0000"));
+        assertTrue(StaffPinPolicy.isWeak("1234"));
+        assertTrue(StaffPinPolicy.isWeak("4321"));
+        assertTrue(StaffPinPolicy.isWeak("1212"));
+        assertTrue(StaffPinPolicy.isWeak("1122"));
+        assertTrue(StaffPinPolicy.isWeak("1221"));
     }
 
     @Test
     void acceptsReasonablePins() {
-        assertFalse(StaffPinPolicy.isWeak("582917"));
-        assertDoesNotThrow(() -> StaffPinPolicy.requireStrong("582917"));
+        assertFalse(StaffPinPolicy.isWeak("5829"));
+        assertDoesNotThrow(() -> StaffPinPolicy.requireStrong("5829"));
     }
 
     @Test
     void requireStrongRejectsShortAndWeak() {
+        assertThrows(IllegalArgumentException.class, () -> StaffPinPolicy.requireStrong("123"));
         assertThrows(IllegalArgumentException.class, () -> StaffPinPolicy.requireStrong("1234"));
         assertThrows(IllegalArgumentException.class, () -> StaffPinPolicy.requireStrong("123456"));
     }
