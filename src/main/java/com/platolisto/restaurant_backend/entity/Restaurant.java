@@ -35,6 +35,9 @@ public class Restaurant {
     @Column(name = "banner_url", length = 512)
     private String bannerUrl;
 
+    @Column(name = "favicon_url", length = 512)
+    private String faviconUrl;
+
     @Column(name = "primary_color", length = 7)
     private String primaryColor;
 

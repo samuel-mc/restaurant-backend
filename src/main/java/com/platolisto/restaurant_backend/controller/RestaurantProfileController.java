@@ -27,11 +27,11 @@ public class RestaurantProfileController {
     public ResponseEntity<RestaurantProfileResponse> updateProfileJson(
             @Valid @RequestBody RestaurantProfileRequest request
     ) {
-        return ResponseEntity.ok(restaurantProfileService.updateProfile(request, null, null));
+        return ResponseEntity.ok(restaurantProfileService.updateProfile(request, null, null, null));
     }
 
     /**
-     * Actualización multipart: campos de texto + {@code logo} / {@code banner} opcionales.
+     * Actualización multipart: campos de texto + {@code logo} / {@code banner} / {@code favicon} opcionales.
      * {@code multipart/*} tolera {@code charset} del BFF (undici).
      */
     @PutMapping(consumes = "multipart/*")
@@ -51,7 +51,8 @@ public class RestaurantProfileController {
             @RequestParam(value = "tableCount", required = false) Integer tableCount,
             @RequestParam(value = "websitePublished", required = false) Boolean websitePublished,
             @RequestParam(value = "logo", required = false) MultipartFile logo,
-            @RequestParam(value = "banner", required = false) MultipartFile banner
+            @RequestParam(value = "banner", required = false) MultipartFile banner,
+            @RequestParam(value = "favicon", required = false) MultipartFile favicon
     ) {
         RestaurantProfileRequest request = RestaurantProfileRequest.builder()
                 .name(name)
@@ -70,6 +71,8 @@ public class RestaurantProfileController {
                 .websitePublished(websitePublished)
                 .build();
 
-        return ResponseEntity.ok(restaurantProfileService.updateProfile(request, logo, banner));
+        return ResponseEntity.ok(
+                restaurantProfileService.updateProfile(request, logo, banner, favicon)
+        );
     }
 }

@@ -47,7 +47,8 @@ public class RestaurantProfileService {
     public RestaurantProfileResponse updateProfile(
             RestaurantProfileRequest request,
             MultipartFile logo,
-            MultipartFile banner
+            MultipartFile banner,
+            MultipartFile favicon
     ) {
         Restaurant restaurant = requireCurrentRestaurant();
 
@@ -129,6 +130,9 @@ public class RestaurantProfileService {
         if (banner != null && !banner.isEmpty()) {
             restaurant.setBannerUrl(objectStorageService.uploadBrandAsset(banner, slug, "banner"));
         }
+        if (favicon != null && !favicon.isEmpty()) {
+            restaurant.setFaviconUrl(objectStorageService.uploadBrandAsset(favicon, slug, "favicon"));
+        }
 
         Restaurant saved = restaurantRepository.save(restaurant);
         log.info("Perfil del restaurante actualizado: {}", saved.getSubdomain());
@@ -180,6 +184,7 @@ public class RestaurantProfileService {
                 .subdomain(restaurant.getSubdomain())
                 .logoUrl(restaurant.getLogoUrl())
                 .bannerUrl(restaurant.getBannerUrl())
+                .faviconUrl(restaurant.getFaviconUrl())
                 .primaryColor(restaurant.getPrimaryColor())
                 .secondaryColor(restaurant.getSecondaryColor())
                 .description(restaurant.getDescription())

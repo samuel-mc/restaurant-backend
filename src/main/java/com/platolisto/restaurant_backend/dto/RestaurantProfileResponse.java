@@ -15,6 +15,7 @@ public class RestaurantProfileResponse {
     private String subdomain;
     private String logoUrl;
     private String bannerUrl;
+    private String faviconUrl;
     private String primaryColor;
     private String secondaryColor;
     private String description;
