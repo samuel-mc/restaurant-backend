@@ -118,17 +118,18 @@ public class SuperAdminService {
 
         restaurant.setPlan(plan);
         restaurant.setPaymentStatus(paymentStatus);
-        if (PlanLimits.canPublishWebsite(plan, paymentStatus)) {
+        applyPeriodEndIfPresent(restaurant, request.getCurrentPeriodEnd());
+        OffsetDateTime periodEnd = restaurant.getCurrentPeriodEnd();
+        if (PlanLimits.canPublishWebsite(plan, paymentStatus, periodEnd)) {
             restaurant.setWebsitePublished(true);
         } else {
             restaurant.setWebsitePublished(false);
         }
-        if (!PlanLimits.canUseProServiceModules(plan, paymentStatus)) {
+        if (!PlanLimits.canUseProServiceModules(plan, paymentStatus, periodEnd)) {
             restaurant.setHasPickup(false);
             restaurant.setHasDelivery(false);
             restaurant.setHasReservations(false);
         }
-        applyPeriodEndIfPresent(restaurant, request.getCurrentPeriodEnd());
 
         Restaurant saved = restaurantRepository.save(restaurant);
         log.warn(

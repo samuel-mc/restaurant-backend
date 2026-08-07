@@ -4,16 +4,17 @@ import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
 
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Límites y reglas por plan + estado de pago.
+ * Límites y reglas por plan + estado de pago + fin de período.
  */
 public final class PlanLimits {
 
-    public static final int BASIC_MAX_PRODUCTS = 30;
+    public static final int BASIC_MAX_PRODUCTS = 20;
 
     public static final String BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE =
             "El Plan Básico permite hasta " + BASIC_MAX_PRODUCTS
@@ -28,11 +29,17 @@ public final class PlanLimits {
     }
 
     /**
-     * Catálogo público en Básico: como máximo {@link #BASIC_MAX_PRODUCTS} platillos
-     * (orden estable por categoría, fecha de alta e id). Pro no limita.
+     * Catálogo público sin límite solo con Pro vigente.
+     * Básico, Pro pendiente o período vencido: como máximo {@link #BASIC_MAX_PRODUCTS}.
      */
-    public static List<Product> limitPublicCatalog(SubscriptionPlan plan, List<Product> availableProducts) {
-        if (plan == SubscriptionPlan.PRO || availableProducts.size() <= BASIC_MAX_PRODUCTS) {
+    public static List<Product> limitPublicCatalog(
+            SubscriptionPlan plan,
+            PaymentStatus paymentStatus,
+            OffsetDateTime currentPeriodEnd,
+            List<Product> availableProducts
+    ) {
+        if (isProEntitled(plan, paymentStatus, currentPeriodEnd)
+                || availableProducts.size() <= BASIC_MAX_PRODUCTS) {
             return availableProducts;
         }
         return availableProducts.stream()
@@ -42,18 +49,27 @@ public final class PlanLimits {
     }
 
     /**
-     * Sitio institucional: solo Pro con pago activo (cupón / confirmación).
+     * Sitio institucional: solo Pro con pago activo y período vigente.
      */
-    public static boolean canPublishWebsite(SubscriptionPlan plan, PaymentStatus paymentStatus) {
-        return plan == SubscriptionPlan.PRO && paymentStatus == PaymentStatus.ACTIVE;
+    public static boolean canPublishWebsite(
+            SubscriptionPlan plan,
+            PaymentStatus paymentStatus,
+            OffsetDateTime currentPeriodEnd
+    ) {
+        return isProEntitled(plan, paymentStatus, currentPeriodEnd);
     }
 
     /**
-     * Menú ilimitado mientras el plan sea Pro (aunque el pago esté pendiente),
-     * para que puedan cargar carta antes de activar el sitio.
+     * Menú ilimitado solo con Pro vigente. Pro sin cupón/pago o con
+     * {@code currentPeriodEnd} vencido queda bajo el tope del Plan Básico.
      */
-    public static boolean canCreateProduct(SubscriptionPlan plan, long activeProductCount) {
-        if (plan == SubscriptionPlan.PRO) {
+    public static boolean canCreateProduct(
+            SubscriptionPlan plan,
+            PaymentStatus paymentStatus,
+            OffsetDateTime currentPeriodEnd,
+            long activeProductCount
+    ) {
+        if (isProEntitled(plan, paymentStatus, currentPeriodEnd)) {
             return true;
         }
         return activeProductCount < BASIC_MAX_PRODUCTS;
@@ -66,19 +82,45 @@ public final class PlanLimits {
                 + ". Actualiza al Plan Pro para menú ilimitado.";
     }
 
-    public static boolean isProEntitled(SubscriptionPlan plan, PaymentStatus paymentStatus) {
-        return plan == SubscriptionPlan.PRO && paymentStatus == PaymentStatus.ACTIVE;
+    /**
+     * Pro vigente: plan PRO, pago ACTIVE y período no vencido.
+     * {@code currentPeriodEnd == null} = sin fecha de corte (vigente mientras ACTIVE).
+     */
+    public static boolean isProEntitled(
+            SubscriptionPlan plan,
+            PaymentStatus paymentStatus,
+            OffsetDateTime currentPeriodEnd
+    ) {
+        if (plan != SubscriptionPlan.PRO || paymentStatus != PaymentStatus.ACTIVE) {
+            return false;
+        }
+        return !isPeriodExpired(currentPeriodEnd);
     }
 
     /**
-     * Pickup, delivery y reservaciones: solo Plan Pro con pago activo.
+     * {@code null} = sin expiración configurada. Fecha en el pasado = vencido.
      */
-    public static boolean canUseProServiceModules(SubscriptionPlan plan, PaymentStatus paymentStatus) {
-        return isProEntitled(plan, paymentStatus);
+    public static boolean isPeriodExpired(OffsetDateTime currentPeriodEnd) {
+        return currentPeriodEnd != null && !currentPeriodEnd.isAfter(OffsetDateTime.now());
+    }
+
+    /**
+     * Pickup, delivery y reservaciones: solo Plan Pro vigente.
+     */
+    public static boolean canUseProServiceModules(
+            SubscriptionPlan plan,
+            PaymentStatus paymentStatus,
+            OffsetDateTime currentPeriodEnd
+    ) {
+        return isProEntitled(plan, paymentStatus, currentPeriodEnd);
     }
 
     /** @deprecated usar {@link #canUseProServiceModules} */
-    public static boolean canUsePickupAndDelivery(SubscriptionPlan plan, PaymentStatus paymentStatus) {
-        return canUseProServiceModules(plan, paymentStatus);
+    public static boolean canUsePickupAndDelivery(
+            SubscriptionPlan plan,
+            PaymentStatus paymentStatus,
+            OffsetDateTime currentPeriodEnd
+    ) {
+        return canUseProServiceModules(plan, paymentStatus, currentPeriodEnd);
     }
 }

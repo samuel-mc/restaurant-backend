@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platolisto.restaurant_backend.dto.ProductRequest;
 import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Category;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
@@ -326,6 +327,7 @@ class ProductIntegrationTest {
     @Test
     void shouldCapPublicCatalogAtBasicLimitAfterDowngrade() throws Exception {
         mockRestaurant.setPlan(SubscriptionPlan.PRO);
+        mockRestaurant.setPaymentStatus(PaymentStatus.ACTIVE);
         restaurantRepository.save(mockRestaurant);
 
         TenantContext.setCurrentTenant(mockRestaurant.getId());
@@ -343,6 +345,165 @@ class ProductIntegrationTest {
 
         mockRestaurant.setPlan(SubscriptionPlan.BASIC);
         restaurantRepository.save(mockRestaurant);
+
+        mockMvc.perform(get("/api/v1/menu/catalog")
+                        .header("X-Tenant", "kfc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(PlanLimits.BASIC_MAX_PRODUCTS)));
+    }
+
+    @Test
+    void shouldRejectCreateBeyondBasicProductLimit() throws Exception {
+        mockRestaurant.setPlan(SubscriptionPlan.BASIC);
+        mockRestaurant.setPaymentStatus(PaymentStatus.ACTIVE);
+        restaurantRepository.save(mockRestaurant);
+
+        TenantContext.setCurrentTenant(mockRestaurant.getId());
+        for (int i = 0; i < PlanLimits.BASIC_MAX_PRODUCTS; i++) {
+            productRepository.save(Product.builder()
+                    .restaurant(mockRestaurant)
+                    .category(mockCategory)
+                    .name("Limit " + i)
+                    .price(new BigDecimal("1.00"))
+                    .isAvailable(true)
+                    .build());
+        }
+        TenantContext.clear();
+
+        ProductRequest overflow = ProductRequest.builder()
+                .name("Overflow")
+                .price(new BigDecimal("1.00"))
+                .categoryId(mockCategory.getId())
+                .build();
+
+        mockMvc.perform(post("/api/v1/admin/products")
+                        .header("X-Tenant", "kfc")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(overflow)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE));
+    }
+
+    @Test
+    void shouldRejectCreateWhenProPendingPaymentAtBasicLimit() throws Exception {
+        mockRestaurant.setPlan(SubscriptionPlan.PRO);
+        mockRestaurant.setPaymentStatus(PaymentStatus.PENDING_PAYMENT);
+        restaurantRepository.save(mockRestaurant);
+
+        TenantContext.setCurrentTenant(mockRestaurant.getId());
+        for (int i = 0; i < PlanLimits.BASIC_MAX_PRODUCTS; i++) {
+            productRepository.save(Product.builder()
+                    .restaurant(mockRestaurant)
+                    .category(mockCategory)
+                    .name("Pending " + i)
+                    .price(new BigDecimal("1.00"))
+                    .isAvailable(true)
+                    .build());
+        }
+        TenantContext.clear();
+
+        ProductRequest overflow = ProductRequest.builder()
+                .name("Overflow pending")
+                .price(new BigDecimal("1.00"))
+                .categoryId(mockCategory.getId())
+                .build();
+
+        mockMvc.perform(post("/api/v1/admin/products")
+                        .header("X-Tenant", "kfc")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(overflow)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE));
+    }
+
+    @Test
+    void shouldAllowCreateBeyondBasicLimitWhenProActive() throws Exception {
+        mockRestaurant.setPlan(SubscriptionPlan.PRO);
+        mockRestaurant.setPaymentStatus(PaymentStatus.ACTIVE);
+        mockRestaurant.setCurrentPeriodEnd(null);
+        restaurantRepository.save(mockRestaurant);
+
+        TenantContext.setCurrentTenant(mockRestaurant.getId());
+        for (int i = 0; i < PlanLimits.BASIC_MAX_PRODUCTS; i++) {
+            productRepository.save(Product.builder()
+                    .restaurant(mockRestaurant)
+                    .category(mockCategory)
+                    .name("Pro " + i)
+                    .price(new BigDecimal("1.00"))
+                    .isAvailable(true)
+                    .build());
+        }
+        TenantContext.clear();
+
+        ProductRequest extra = ProductRequest.builder()
+                .name("Pro unlimited")
+                .price(new BigDecimal("1.00"))
+                .categoryId(mockCategory.getId())
+                .build();
+
+        mockMvc.perform(post("/api/v1/admin/products")
+                        .header("X-Tenant", "kfc")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(extra)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Pro unlimited"));
+    }
+
+    @Test
+    void shouldRejectCreateWhenProPeriodExpired() throws Exception {
+        mockRestaurant.setPlan(SubscriptionPlan.PRO);
+        mockRestaurant.setPaymentStatus(PaymentStatus.ACTIVE);
+        mockRestaurant.setCurrentPeriodEnd(java.time.OffsetDateTime.now().minusDays(1));
+        restaurantRepository.save(mockRestaurant);
+
+        TenantContext.setCurrentTenant(mockRestaurant.getId());
+        for (int i = 0; i < PlanLimits.BASIC_MAX_PRODUCTS; i++) {
+            productRepository.save(Product.builder()
+                    .restaurant(mockRestaurant)
+                    .category(mockCategory)
+                    .name("Expired " + i)
+                    .price(new BigDecimal("1.00"))
+                    .isAvailable(true)
+                    .build());
+        }
+        TenantContext.clear();
+
+        ProductRequest overflow = ProductRequest.builder()
+                .name("Overflow expired")
+                .price(new BigDecimal("1.00"))
+                .categoryId(mockCategory.getId())
+                .build();
+
+        mockMvc.perform(post("/api/v1/admin/products")
+                        .header("X-Tenant", "kfc")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(overflow)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE));
+    }
+
+    @Test
+    void shouldCapPublicCatalogWhenProPendingPayment() throws Exception {
+        mockRestaurant.setPlan(SubscriptionPlan.PRO);
+        mockRestaurant.setPaymentStatus(PaymentStatus.PENDING_PAYMENT);
+        restaurantRepository.save(mockRestaurant);
+
+        TenantContext.setCurrentTenant(mockRestaurant.getId());
+        int total = PlanLimits.BASIC_MAX_PRODUCTS + 3;
+        for (int i = 0; i < total; i++) {
+            productRepository.save(Product.builder()
+                    .restaurant(mockRestaurant)
+                    .category(mockCategory)
+                    .name("Pending catalog " + i)
+                    .price(new BigDecimal("1.00"))
+                    .isAvailable(true)
+                    .build());
+        }
+        TenantContext.clear();
 
         mockMvc.perform(get("/api/v1/menu/catalog")
                         .header("X-Tenant", "kfc"))

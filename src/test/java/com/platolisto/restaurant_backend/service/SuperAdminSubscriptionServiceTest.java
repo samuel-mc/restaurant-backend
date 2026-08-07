@@ -169,4 +169,29 @@ class SuperAdminSubscriptionServiceTest {
         verify(restaurantRepository).save(captor.capture());
         assertThat(captor.getValue().getCurrentPeriodEnd()).isNull();
     }
+
+    @Test
+    void expiredPeriodUnpublishesWebsiteAndDisablesModules() {
+        restaurant.setHasPickup(true);
+        restaurant.setHasDelivery(true);
+        restaurant.setWebsitePublished(true);
+        when(restaurantRepository.findById(10L)).thenReturn(Optional.of(restaurant));
+        when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        String expired = OffsetDateTime.now().minusDays(2).toString();
+        var request = SuperAdminTenantSubscriptionRequest.builder()
+                .plan(SubscriptionPlan.PRO)
+                .paymentStatus(PaymentStatus.ACTIVE)
+                .currentPeriodEnd(expired)
+                .build();
+
+        var response = superAdminService.updateTenantSubscription(10L, request, "sa@platolisto.com");
+
+        assertThat(response.isWebsitePublished()).isFalse();
+        ArgumentCaptor<Restaurant> captor = ArgumentCaptor.forClass(Restaurant.class);
+        verify(restaurantRepository).save(captor.capture());
+        assertThat(captor.getValue().isHasPickup()).isFalse();
+        assertThat(captor.getValue().isHasDelivery()).isFalse();
+        assertThat(captor.getValue().isWebsitePublished()).isFalse();
+    }
 }

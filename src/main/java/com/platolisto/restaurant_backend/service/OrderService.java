@@ -44,6 +44,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -431,10 +432,16 @@ public class OrderService {
         SubscriptionPlan plan = restaurant.getPlan() != null
                 ? restaurant.getPlan()
                 : SubscriptionPlan.BASIC;
+        PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
+                ? restaurant.getPaymentStatus()
+                : PaymentStatus.ACTIVE;
+        OffsetDateTime currentPeriodEnd = restaurant.getCurrentPeriodEnd();
         Set<UUID> publicProductUuids = null;
-        if (plan != SubscriptionPlan.PRO) {
+        if (!PlanLimits.isProEntitled(plan, paymentStatus, currentPeriodEnd)) {
             List<Product> visible = PlanLimits.limitPublicCatalog(
                     plan,
+                    paymentStatus,
+                    currentPeriodEnd,
                     productRepository.findByIsAvailableTrue()
             );
             publicProductUuids = visible.stream()
@@ -848,7 +855,8 @@ public class OrderService {
         PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
                 ? restaurant.getPaymentStatus()
                 : PaymentStatus.ACTIVE;
-        return PlanLimits.canUseProServiceModules(plan, paymentStatus);
+        return PlanLimits.canUseProServiceModules(
+                plan, paymentStatus, restaurant.getCurrentPeriodEnd());
     }
 
     /** A domicilio exige nombre, teléfono y dirección (además del @NotBlank de customerName). */

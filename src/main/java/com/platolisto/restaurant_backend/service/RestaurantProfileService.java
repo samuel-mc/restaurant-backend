@@ -99,8 +99,9 @@ public class RestaurantProfileService {
         PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
                 ? restaurant.getPaymentStatus()
                 : PaymentStatus.ACTIVE;
+        OffsetDateTime currentPeriodEnd = restaurant.getCurrentPeriodEnd();
 
-        if (!PlanLimits.canUseProServiceModules(plan, paymentStatus)) {
+        if (!PlanLimits.canUseProServiceModules(plan, paymentStatus, currentPeriodEnd)) {
             if (Boolean.TRUE.equals(request.getHasDelivery())
                     || Boolean.TRUE.equals(request.getHasPickup())
                     || Boolean.TRUE.equals(request.getHasReservations())) {
@@ -115,7 +116,7 @@ public class RestaurantProfileService {
 
         if (request.getWebsitePublished() != null) {
             if (Boolean.TRUE.equals(request.getWebsitePublished())
-                    && !PlanLimits.canPublishWebsite(plan, paymentStatus)) {
+                    && !PlanLimits.canPublishWebsite(plan, paymentStatus, currentPeriodEnd)) {
                 throw new IllegalArgumentException(
                         "Para publicar el sitio necesitas Plan Pro con pago activo. "
                                 + "Canjea un cupón en Configuración o contacta a ventas."
@@ -177,7 +178,8 @@ public class RestaurantProfileService {
         PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
                 ? restaurant.getPaymentStatus()
                 : PaymentStatus.ACTIVE;
-        boolean proModulesAllowed = PlanLimits.canUseProServiceModules(plan, paymentStatus);
+        boolean proModulesAllowed = PlanLimits.canUseProServiceModules(
+                plan, paymentStatus, restaurant.getCurrentPeriodEnd());
 
         RestaurantProfileResponse.RestaurantProfileResponseBuilder builder = RestaurantProfileResponse.builder()
                 .id(restaurant.getId())
@@ -198,7 +200,7 @@ public class RestaurantProfileService {
                 .hasReservations(proModulesAllowed && restaurant.isHasReservations())
                 .orderingEnabled(restaurant.isOrderingEnabled())
                 .tableCount(normalizeStoredTableCount(restaurant.getTableCount()))
-                .websitePublished(restaurant.isWebsitePublished())
+                .websitePublished(proModulesAllowed && restaurant.isWebsitePublished())
                 .updatedAt(restaurant.getUpdatedAt());
 
         if (includeBilling) {

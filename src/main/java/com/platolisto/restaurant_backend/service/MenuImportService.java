@@ -5,6 +5,7 @@ import com.platolisto.restaurant_backend.dto.MenuImportResultDTO;
 import com.platolisto.restaurant_backend.dto.MenuImportRowError;
 import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Category;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
@@ -34,6 +35,7 @@ import java.io.InputStreamReader;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -165,9 +167,13 @@ public class MenuImportService {
         SubscriptionPlan plan = restaurant.getPlan() != null
                 ? restaurant.getPlan()
                 : SubscriptionPlan.BASIC;
+        PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
+                ? restaurant.getPaymentStatus()
+                : PaymentStatus.ACTIVE;
+        OffsetDateTime currentPeriodEnd = restaurant.getCurrentPeriodEnd();
 
-        if (plan != SubscriptionPlan.PRO) {
-            if (!PlanLimits.canCreateProduct(plan, activeCount)) {
+        if (!PlanLimits.isProEntitled(plan, paymentStatus, currentPeriodEnd)) {
+            if (!PlanLimits.canCreateProduct(plan, paymentStatus, currentPeriodEnd, activeCount)) {
                 throw new IllegalArgumentException(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE);
             }
             if (activeCount + rows.size() > PlanLimits.BASIC_MAX_PRODUCTS) {
@@ -192,7 +198,8 @@ public class MenuImportService {
             processed++;
             try {
                 ValidatedDish dish = validateRow(row);
-                if (!PlanLimits.canCreateProduct(plan, activeCount + createdProducts.size())) {
+                if (!PlanLimits.canCreateProduct(
+                        plan, paymentStatus, currentPeriodEnd, activeCount + createdProducts.size())) {
                     // Red de seguridad: no debería ocurrir tras el prechequeo.
                     throw new IllegalArgumentException(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE);
                 }

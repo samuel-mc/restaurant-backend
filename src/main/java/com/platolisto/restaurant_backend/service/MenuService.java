@@ -1,6 +1,7 @@
 package com.platolisto.restaurant_backend.service;
 
 import com.platolisto.restaurant_backend.dto.ProductResponse;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
@@ -13,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,16 +34,21 @@ public class MenuService {
 
         Long restaurantId = TenantContext.getCurrentTenant();
         SubscriptionPlan plan = SubscriptionPlan.BASIC;
+        PaymentStatus paymentStatus = PaymentStatus.ACTIVE;
+        OffsetDateTime currentPeriodEnd = null;
         if (restaurantId != null) {
-            plan = restaurantRepository.findById(restaurantId)
-                    .map(Restaurant::getPlan)
-                    .orElse(SubscriptionPlan.BASIC);
-            if (plan == null) {
-                plan = SubscriptionPlan.BASIC;
+            Restaurant restaurant = restaurantRepository.findById(restaurantId).orElse(null);
+            if (restaurant != null) {
+                plan = restaurant.getPlan() != null ? restaurant.getPlan() : SubscriptionPlan.BASIC;
+                paymentStatus = restaurant.getPaymentStatus() != null
+                        ? restaurant.getPaymentStatus()
+                        : PaymentStatus.ACTIVE;
+                currentPeriodEnd = restaurant.getCurrentPeriodEnd();
             }
         }
 
-        List<Product> visible = PlanLimits.limitPublicCatalog(plan, availableProducts);
+        List<Product> visible = PlanLimits.limitPublicCatalog(
+                plan, paymentStatus, currentPeriodEnd, availableProducts);
 
         return visible.stream()
                 .map(product -> ProductResponse.builder()

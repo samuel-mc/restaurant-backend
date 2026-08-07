@@ -3,6 +3,7 @@ package com.platolisto.restaurant_backend.service;
 import com.platolisto.restaurant_backend.dto.ProductRequest;
 import com.platolisto.restaurant_backend.dto.ProductResponse;
 import com.platolisto.restaurant_backend.entity.Category;
+import com.platolisto.restaurant_backend.entity.PaymentStatus;
 import com.platolisto.restaurant_backend.entity.Product;
 import com.platolisto.restaurant_backend.entity.Restaurant;
 import com.platolisto.restaurant_backend.entity.SubscriptionPlan;
@@ -50,7 +51,11 @@ public class ProductService {
         SubscriptionPlan plan = restaurant.getPlan() != null
                 ? restaurant.getPlan()
                 : SubscriptionPlan.BASIC;
-        if (!PlanLimits.canCreateProduct(plan, activeCount)) {
+        PaymentStatus paymentStatus = restaurant.getPaymentStatus() != null
+                ? restaurant.getPaymentStatus()
+                : PaymentStatus.ACTIVE;
+        if (!PlanLimits.canCreateProduct(
+                plan, paymentStatus, restaurant.getCurrentPeriodEnd(), activeCount)) {
             throw new IllegalArgumentException(PlanLimits.BASIC_PRODUCT_LIMIT_UPGRADE_MESSAGE);
         }
 
