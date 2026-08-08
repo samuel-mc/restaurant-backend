@@ -82,4 +82,16 @@ public class GlobalExceptionHandler {
         response.put("error", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(response);
     }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, String>> handleMaxUploadSize(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex
+    ) {
+        Map<String, String> response = new HashMap<>();
+        response.put(
+                "error",
+                "El archivo supera el tamaño máximo permitido (5 MB por imagen)."
+        );
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(response);
+    }
 }
