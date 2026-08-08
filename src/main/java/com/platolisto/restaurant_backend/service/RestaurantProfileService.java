@@ -104,14 +104,17 @@ public class RestaurantProfileService {
         if (!PlanLimits.canUseProServiceModules(plan, paymentStatus, currentPeriodEnd)) {
             if (Boolean.TRUE.equals(request.getHasDelivery())
                     || Boolean.TRUE.equals(request.getHasPickup())
-                    || Boolean.TRUE.equals(request.getHasReservations())) {
+                    || Boolean.TRUE.equals(request.getHasReservations())
+                    || Boolean.TRUE.equals(request.getOrderingEnabled())) {
                 throw new IllegalArgumentException(
-                        "Para llevar, a domicilio y reservaciones están disponibles solo en Plan Pro con pago activo."
+                        "Pedidos digitales, para llevar, a domicilio y reservaciones "
+                                + "están disponibles solo en Plan Pro con pago activo."
                 );
             }
             restaurant.setHasDelivery(false);
             restaurant.setHasPickup(false);
             restaurant.setHasReservations(false);
+            restaurant.setOrderingEnabled(false);
         }
 
         if (request.getWebsitePublished() != null) {
@@ -198,7 +201,7 @@ public class RestaurantProfileService {
                 .hasDelivery(proModulesAllowed && restaurant.isHasDelivery())
                 .hasPickup(proModulesAllowed && restaurant.isHasPickup())
                 .hasReservations(proModulesAllowed && restaurant.isHasReservations())
-                .orderingEnabled(restaurant.isOrderingEnabled())
+                .orderingEnabled(proModulesAllowed && restaurant.isOrderingEnabled())
                 .tableCount(normalizeStoredTableCount(restaurant.getTableCount()))
                 .websitePublished(proModulesAllowed && restaurant.isWebsitePublished())
                 .updatedAt(restaurant.getUpdatedAt());

@@ -89,6 +89,7 @@ class SuperAdminSubscriptionServiceTest {
         restaurant.setHasPickup(true);
         restaurant.setHasDelivery(true);
         restaurant.setHasReservations(true);
+        restaurant.setOrderingEnabled(true);
         when(restaurantRepository.findById(10L)).thenReturn(Optional.of(restaurant));
         when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -106,6 +107,7 @@ class SuperAdminSubscriptionServiceTest {
         assertThat(captor.getValue().isHasPickup()).isFalse();
         assertThat(captor.getValue().isHasDelivery()).isFalse();
         assertThat(captor.getValue().isHasReservations()).isFalse();
+        assertThat(captor.getValue().isOrderingEnabled()).isFalse();
     }
 
     @Test
@@ -174,6 +176,7 @@ class SuperAdminSubscriptionServiceTest {
     void expiredPeriodUnpublishesWebsiteAndDisablesModules() {
         restaurant.setHasPickup(true);
         restaurant.setHasDelivery(true);
+        restaurant.setOrderingEnabled(true);
         restaurant.setWebsitePublished(true);
         when(restaurantRepository.findById(10L)).thenReturn(Optional.of(restaurant));
         when(restaurantRepository.save(any(Restaurant.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -192,6 +195,7 @@ class SuperAdminSubscriptionServiceTest {
         verify(restaurantRepository).save(captor.capture());
         assertThat(captor.getValue().isHasPickup()).isFalse();
         assertThat(captor.getValue().isHasDelivery()).isFalse();
+        assertThat(captor.getValue().isOrderingEnabled()).isFalse();
         assertThat(captor.getValue().isWebsitePublished()).isFalse();
     }
 }

@@ -102,6 +102,12 @@ public class OrderService {
                     "Este restaurante no acepta pedidos desde el menú digital. El menú es solo consulta."
             );
         }
+        if (!isDigitalOrderingAllowed(restaurant)) {
+            throw new IllegalArgumentException(
+                    "Los pedidos del menú digital requieren Plan Pro vigente. "
+                            + "Canjea un cupón o renueva tu suscripción."
+            );
+        }
 
         validateOrderTypeAllowed(restaurant, request.getOrderType());
         validateDeliveryContact(request);
@@ -148,6 +154,11 @@ public class OrderService {
         if (!restaurant.isOrderingEnabled()) {
             throw new IllegalArgumentException(
                     "Este restaurante no acepta pedidos. Activa el módulo de pedidos en configuración."
+            );
+        }
+        if (!isDigitalOrderingAllowed(restaurant)) {
+            throw new IllegalArgumentException(
+                    "Los pedidos requieren Plan Pro vigente. Canjea un cupón o renueva tu suscripción."
             );
         }
 
@@ -857,6 +868,11 @@ public class OrderService {
                 : PaymentStatus.ACTIVE;
         return PlanLimits.canUseProServiceModules(
                 plan, paymentStatus, restaurant.getCurrentPeriodEnd());
+    }
+
+    /** Pedidos (menú digital / mesero): mismo entitlement Pro vigente. */
+    private static boolean isDigitalOrderingAllowed(Restaurant restaurant) {
+        return isPickupDeliveryAllowed(restaurant);
     }
 
     /** A domicilio exige nombre, teléfono y dirección (además del @NotBlank de customerName). */

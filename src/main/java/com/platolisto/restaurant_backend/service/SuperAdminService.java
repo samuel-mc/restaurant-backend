@@ -129,6 +129,7 @@ public class SuperAdminService {
             restaurant.setHasPickup(false);
             restaurant.setHasDelivery(false);
             restaurant.setHasReservations(false);
+            restaurant.setOrderingEnabled(false);
         }
 
         Restaurant saved = restaurantRepository.save(restaurant);
